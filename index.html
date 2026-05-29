@@ -388,12 +388,12 @@
     <div id="sec-spe" class="content">
 
         <!-- Cabeçalho -->
-        <div style="background:linear-gradient(90deg,#2D0B5A,#6B35A8);padding:14px 16px;border-radius:14px;margin-bottom:12px;">
-            <div style="color:white;font-size:15px;font-weight:bold;margin-bottom:4px;">🔗 Integração com o SPE</div>
-            <div style="color:rgba(255,255,255,0.75);font-size:12px;">Sistema de Patrulha e Escolta — Brigada Militar RS</div>
+        <div style="background:linear-gradient(135deg,#2D0B5A,#6B35A8);padding:16px;border-radius:14px;margin-bottom:12px;text-align:center;">
+            <div style="color:white;font-size:16px;font-weight:bold;margin-bottom:4px;">🔗 Integração SPE → Patrulha</div>
+            <div style="color:rgba(255,255,255,0.75);font-size:12px;">Importação automática para o Firebase</div>
         </div>
 
-        <!-- Painel de progresso (oculto por padrão) -->
+        <!-- Painel de progresso -->
         <div id="spe-painel" style="display:none;background:#fff;border:1.5px solid #6B35A8;border-radius:12px;padding:12px;margin-bottom:12px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
                 <span style="font-size:12px;font-weight:bold;color:#6B35A8;">📥 Importação em andamento</span>
@@ -406,38 +406,57 @@
             <div id="spe-log-box" style="max-height:150px;overflow-y:auto;font-size:10px;font-family:monospace;background:#f5f5f5;border-radius:8px;padding:8px;color:#333;white-space:pre;"></div>
         </div>
 
-        <!-- Passo 1 -->
-        <div class="card">
-            <div class="card-title">📌 Passo 1 — Abrir o SPE</div>
-            <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">O SPE não permite ser aberto dentro deste site (bloqueio de segurança do servidor). Clique no botão abaixo para abrir o SPE numa janela separada.</p>
-            <button onclick="speAbrirPopup()" style="width:100%;padding:13px;background:linear-gradient(90deg,#2D0B5A,#6B35A8);color:white;border:none;border-radius:11px;font-size:14px;font-weight:bold;cursor:pointer;">🌐 ABRIR SPE EM NOVA JANELA</button>
-        </div>
+        <!-- BOOKMARKLET — destaque principal -->
+        <div class="card" style="border:2px solid #6B35A8;background:linear-gradient(135deg,#f5f0ff,#fff);">
+            <div class="card-title" style="color:#6B35A8;font-size:13px;">⭐ BOOKMARKLET — Adicione aos Favoritos</div>
+            <p style="font-size:13px;color:#444;margin-bottom:14px;">Arraste o botão abaixo para a <b>barra de favoritos</b> do navegador. Depois, dentro do SPE, é só clicar nele para importar tudo automaticamente.</p>
 
-        <!-- Passo 2 -->
-        <div class="card">
-            <div class="card-title">📌 Passo 2 — Bookmarklet de importação</div>
-            <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">Arraste o botão abaixo para a <b>barra de favoritos</b> do navegador. Só precisa fazer isso <b>uma vez</b>.</p>
-            <div style="background:#f5f0ff;border:1.5px dashed #6B35A8;border-radius:11px;padding:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-                <a id="spe-bookmarklet" href="#" style="display:inline-flex;align-items:center;gap:8px;padding:12px 20px;background:linear-gradient(135deg,#2D0B5A,#6B35A8);color:white;border-radius:10px;font-size:13px;font-weight:bold;text-decoration:none;white-space:nowrap;cursor:grab;box-shadow:0 4px 14px rgba(107,53,168,0.4);">
+            <!-- Botão para arrastar -->
+            <div style="background:#f0e8ff;border:2px dashed #9058CC;border-radius:14px;padding:18px;text-align:center;margin-bottom:12px;">
+                <div style="font-size:11px;color:#6B35A8;margin-bottom:10px;font-weight:600;">👇 ARRASTE ESTE BOTÃO PARA A BARRA DE FAVORITOS</div>
+                <a id="spe-bookmarklet" href="#"
+                   style="display:inline-flex;align-items:center;gap:10px;padding:14px 24px;background:linear-gradient(135deg,#2D0B5A,#6B35A8);color:white;border-radius:12px;font-size:15px;font-weight:bold;text-decoration:none;cursor:grab;box-shadow:0 6px 20px rgba(107,53,168,0.5);user-select:none;"
+                   ondragstart="this.style.opacity='0.7'" ondragend="this.style.opacity='1'">
                     🚔 Importar SPE → Patrulha
                 </a>
-                <span style="font-size:12px;color:#6B35A8;flex:1;min-width:160px;">← Arraste para a barra de favoritos</span>
+                <div style="font-size:11px;color:#888;margin-top:10px;">↑ Segure e arraste até a barra de favoritos ↑</div>
             </div>
-            <p style="font-size:11px;color:var(--muted);margin-top:10px;">💡 Se a barra de favoritos não aparecer no SPE, pressione <b>Ctrl+Shift+B</b> para exibi-la.</p>
+
+            <!-- Animação ilustrativa -->
+            <div style="background:#fff;border:1px solid #e0d6f7;border-radius:10px;padding:10px 14px;font-size:11px;color:#555;line-height:1.8;">
+                <b style="color:#6B35A8;">Como ativar a barra de favoritos:</b><br>
+                • <b>Edge / Chrome:</b> pressione <kbd style="background:#eee;padding:1px 5px;border-radius:4px;font-size:10px;">Ctrl+Shift+B</kbd><br>
+                • <b>Firefox:</b> pressione <kbd style="background:#eee;padding:1px 5px;border-radius:4px;font-size:10px;">Ctrl+Shift+B</kbd><br>
+                • <b>Celular:</b> favoritos ficam no menu ☰ do navegador
+            </div>
         </div>
 
-        <!-- Passo 3 -->
+        <!-- Passo a passo -->
         <div class="card">
-            <div class="card-title">📌 Passo 3 — Importar as vítimas</div>
-            <ol style="font-size:13px;color:var(--muted);line-height:2;padding-left:18px;">
-                <li>Na janela do SPE, faça login com suas credenciais</li>
-                <li>Navegue até a tela de <b>Vítimas</b></li>
-                <li>Aplique o filtro de OPM desejado</li>
-                <li>Clique no favorito <b>"🚔 Importar SPE → Patrulha"</b></li>
-                <li>Acompanhe o progresso aqui nesta tela</li>
-            </ol>
-            <div style="margin-top:12px;padding:10px;background:#E8F5E9;border-radius:10px;font-size:12px;color:#2E7D32;">
-                ✅ As vítimas serão cadastradas automaticamente com endereço geocodificado e aparecerão no mapa em tempo real.
+            <div class="card-title">📋 Como usar</div>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+                <div style="display:flex;gap:12px;align-items:flex-start;">
+                    <div style="min-width:28px;height:28px;background:#6B35A8;color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:bold;">1</div>
+                    <div style="font-size:13px;color:#333;padding-top:4px;">Arraste o botão acima para a barra de favoritos <b>(uma vez por computador)</b></div>
+                </div>
+                <div style="display:flex;gap:12px;align-items:flex-start;">
+                    <div style="min-width:28px;height:28px;background:#6B35A8;color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:bold;">2</div>
+                    <div style="font-size:13px;color:#333;padding-top:4px;">
+                        Abra o SPE e faça login
+                        <button onclick="speAbrirPopup()" style="display:inline-flex;align-items:center;gap:5px;margin-left:8px;padding:5px 12px;background:#6B35A8;color:white;border:none;border-radius:8px;font-size:11px;font-weight:bold;cursor:pointer;">🌐 Abrir SPE</button>
+                    </div>
+                </div>
+                <div style="display:flex;gap:12px;align-items:flex-start;">
+                    <div style="min-width:28px;height:28px;background:#6B35A8;color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:bold;">3</div>
+                    <div style="font-size:13px;color:#333;padding-top:4px;">Vá em <b>Vítimas</b>, aplique o filtro de OPM desejado</div>
+                </div>
+                <div style="display:flex;gap:12px;align-items:flex-start;">
+                    <div style="min-width:28px;height:28px;background:#2E7D32;color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:bold;">4</div>
+                    <div style="font-size:13px;color:#333;padding-top:4px;">Clique no favorito <b>"🚔 Importar SPE → Patrulha"</b> — importação automática!</div>
+                </div>
+            </div>
+            <div style="margin-top:12px;padding:10px 14px;background:#E8F5E9;border-radius:10px;font-size:12px;color:#2E7D32;border:1px solid #A5D6A7;">
+                ✅ As vítimas são salvas direto no Firebase e aparecem no mapa para todos os usuários em tempo real.
             </div>
         </div>
 
