@@ -1764,7 +1764,7 @@ function closeEditModal() {
     if (mapEdit) { mapEdit.remove(); mapEdit = null; markerEdit = null; }
 }
 
-function saveEdit() {
+async function saveEdit() {
     const id = document.getElementById('edit-id').value;
     const city  = document.getElementById('edit-cidade').value.trim();
     const vnome = document.getElementById('edit-vnome').value.trim();
@@ -1781,29 +1781,48 @@ function saveEdit() {
     if (!anome) return alert('⚠️ Informe o nome do agressor.');
     if (!valid) return alert('⚠️ Informe a validade da MPU.');
 
+    const lat = parseFloat(document.getElementById('edit-lat').value);
+    const lng = parseFloat(document.getElementById('edit-lng').value);
+
     victims = loadVictims();
     const idx = victims.findIndex(x => x.id == id);
     if (idx < 0) return alert('Registro não encontrado.');
 
-    const lat  = parseFloat(document.getElementById('edit-lat').value) || victims[idx].lat;
-    const lng  = parseFloat(document.getElementById('edit-lng').value) || victims[idx].lng;
+    // Preserva lat/lng anteriores se o mapa não foi usado
+    const novaLat = isNaN(lat) ? victims[idx].lat : lat;
+    const novaLng = isNaN(lng) ? victims[idx].lng : lng;
+    const locAlterada = !isNaN(lat) && !isNaN(lng) && (lat !== victims[idx].lat || lng !== victims[idx].lng);
 
     const old = victims[idx];
-    victims[idx] = { ...old, city, v_nome: vnome, rua, valid, a_nome: anome, a_rua: arua, a_rg: arg, dist: raio,
-        lat, lng, geo_impreciso: false,
+    victims[idx] = { ...old, city, v_nome: vnome, rua, valid,
+        a_nome: anome, a_rua: arua, a_rg: arg, dist: raio,
+        lat: novaLat, lng: novaLng,
+        geo_impreciso: locAlterada ? false : (old.geo_impreciso || false),
         updatedAt: new Date().toISOString(), updatedBy: curUser.id };
+
     saveVictims(victims);
-    if (fbConnected) {
-        victims[idx]._secret = APP_SECRET;
-        db.collection('victims').doc(String(id)).set(victims[idx]).catch(e => console.warn(e));
-    }
-    addLog('VICTIM', `Medida protetiva editada: ${vnome} — Agressor: ${anome} — ${city}`, curUser.id);
     closeEditModal();
+
+    // Renderiza imediatamente com dados locais
     renderVictims();
     renderMarkersOnMap();
+
+    // Salva no Firebase e re-renderiza ao confirmar
+    if (fbConnected) {
+        try {
+            victims[idx]._secret = APP_SECRET;
+            await db.collection('victims').doc(String(id)).set(victims[idx]);
+            // Re-renderiza após confirmação do Firebase
+            renderMarkersOnMap();
+        } catch(e) {
+            console.warn('[Firebase] saveEdit:', e.message);
+        }
+    }
+
+    addLog('VICTIM', `Editada: ${vnome} — ${anome} — ${city}`, curUser.id);
     const agSec = document.getElementById('sec-agressores');
     if (agSec && agSec.classList.contains('active')) renderAgressores();
-    alert('✅ Medida protetiva atualizada com sucesso!');
+    alert('✅ Medida protetiva atualizada!');
 }
 
 // ═══════════════════════════════════════════════
