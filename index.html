@@ -1658,6 +1658,67 @@ function editV(id) { editAgressor(id); }
 // Mapa de edição
 let mapEdit = null, markerEdit = null;
 
+async function editLocalizarEndereco() {
+    const btn = event.target.closest('button');
+    const rua    = document.getElementById('edit-rua').value.trim();
+    const cidade = document.getElementById('edit-cidade').value.trim();
+
+    if (!rua)    return alert('⚠️ Preencha o endereço antes de localizar.');
+    if (!cidade) return alert('⚠️ Selecione a cidade antes de localizar.');
+
+    if (btn) { btn.textContent = '⏳ Localizando...'; btn.disabled = true; }
+
+    const geo = _CIDADES_GEO[cidade];
+    let url = 'https://nominatim.openstreetmap.org/search?format=json&limit=5&q='
+        + encodeURIComponent(rua + ', ' + cidade + ', RS, Brasil');
+    if (geo) url += '&viewbox='+(geo.lng-geo.r)+','+(geo.lat-geo.r)+','+(geo.lng+geo.r)+','+(geo.lat+geo.r)+'&bounded=1';
+
+    try {
+        const resp = await fetch(url, { headers: { 'Accept-Language': 'pt-BR' } });
+        const resultados = await resp.json();
+
+        let melhor = null;
+        if (resultados.length > 0) {
+            if (geo) {
+                let menor = Infinity;
+                for (const r of resultados) {
+                    const dist = Math.sqrt(Math.pow(+r.lat-geo.lat,2)+Math.pow(+r.lon-geo.lng,2));
+                    if (dist < menor) { menor = dist; melhor = r; }
+                }
+                // Se muito longe da cidade, ignora
+                if (menor > geo.r * 3) melhor = null;
+            } else {
+                melhor = resultados[0];
+            }
+        }
+
+        if (melhor) {
+            const lat = +melhor.lat, lng = +melhor.lon;
+            document.getElementById('edit-lat').value = lat.toFixed(6);
+            document.getElementById('edit-lng').value = lng.toFixed(6);
+            document.getElementById('edit-geo-coords').textContent = lat.toFixed(6) + ', ' + lng.toFixed(6);
+            if (mapEdit && markerEdit) {
+                markerEdit.setLatLng([lat, lng]);
+                mapEdit.setView([lat, lng], 17);
+            }
+            if (btn) { btn.innerHTML = '✅ ENDEREÇO LOCALIZADO!'; btn.style.background = 'linear-gradient(90deg,#1B5E20,#2E7D32)'; btn.disabled = false; }
+            setTimeout(() => {
+                if (btn) { btn.innerHTML = '🔍 LOCALIZAR ENDEREÇO NO MAPA'; btn.style.background = ''; btn.disabled = false; }
+            }, 3000);
+        } else {
+            if (btn) { btn.innerHTML = '⚠️ ENDEREÇO NÃO ENCONTRADO'; btn.style.background = 'linear-gradient(90deg,#B71C1C,#C62828)'; btn.disabled = false; }
+            setTimeout(() => {
+                if (btn) { btn.innerHTML = '🔍 LOCALIZAR ENDEREÇO NO MAPA'; btn.style.background = ''; btn.disabled = false; }
+            }, 3000);
+            alert('⚠️ Endereço não encontrado em ' + cidade + '.\nTente digitar de forma diferente ou ajuste o pin manualmente no mapa.');
+        }
+    } catch(e) {
+        if (btn) { btn.innerHTML = '🔍 LOCALIZAR ENDEREÇO NO MAPA'; btn.disabled = false; }
+        alert('❌ Erro ao buscar endereço. Verifique a conexão.');
+    }
+}
+
+
 function editUsarLocalizacaoAtual() {
     const btn = event.target.closest('button');
     if (btn) { btn.textContent = '⏳ Obtendo localização...'; btn.disabled = true; }
@@ -2101,15 +2162,19 @@ initApp(); // inicia app com Firebase
 
         <!-- Mapa de localização -->
         <div style="margin-top:14px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                <label style="font-weight:600;font-size:13px;">📍 Localização no Mapa</label>
-            </div>
-            <p style="font-size:11px;color:var(--muted);margin-bottom:10px;">Toque no mapa ou arraste o marcador para ajustar a localização exata.</p>
+            <label style="font-weight:600;font-size:13px;display:block;margin-bottom:10px;">📍 Localização no Mapa</label>
 
-            <!-- Botão GPS grande — fácil de tocar no celular -->
-            <button onclick="editUsarLocalizacaoAtual()" style="width:100%;padding:14px;background:linear-gradient(90deg,#1B5E20,#2E7D32);color:white;border:none;border-radius:13px;font-size:15px;font-weight:bold;cursor:pointer;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:8px;">
+            <!-- Botão: localizar endereço -->
+            <button onclick="editLocalizarEndereco()" style="width:100%;padding:13px;background:linear-gradient(90deg,#0D47A1,#1976D2);color:white;border:none;border-radius:13px;font-size:14px;font-weight:bold;cursor:pointer;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:8px;">
+                🔍 LOCALIZAR ENDEREÇO NO MAPA
+            </button>
+
+            <!-- Botão GPS -->
+            <button onclick="editUsarLocalizacaoAtual()" style="width:100%;padding:13px;background:linear-gradient(90deg,#1B5E20,#2E7D32);color:white;border:none;border-radius:13px;font-size:14px;font-weight:bold;cursor:pointer;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:8px;">
                 📡 USAR MINHA LOCALIZAÇÃO ATUAL
             </button>
+
+            <p style="font-size:11px;color:var(--muted);margin-bottom:8px;text-align:center;">Ou toque no mapa / arraste o marcador para ajuste manual.</p>
 
             <div id="map-edit" style="height:320px;border-radius:14px;border:2px solid var(--border);overflow:hidden;touch-action:none;"></div>
             <input type="hidden" id="edit-lat">
