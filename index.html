@@ -1880,7 +1880,10 @@ async function speIniciarImportacao() {
             alert(`✅ Importação concluída!\n\n✅ ${importados.length} importadas\n⏭ ${ignorados.length} já existiam\n❌ ${erros.length} erros`);
         }
     }
-    initApp(); // inicia app com Firebase
+    window.addEventListener('message', onMsg);
+} // fecha speIniciarImportacao
+
+initApp(); // inicia app com Firebase
 </script>
 <!-- ══════════════════ MODAL DE EDIÇÃO ══════════════════ -->
 <div id="modal-edit" class="modal-overlay">
