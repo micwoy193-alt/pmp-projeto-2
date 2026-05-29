@@ -1724,14 +1724,83 @@ function _detCidade(txt) {
     return 'Santo Ângelo';
 }
 
+// Coordenadas centrais e raio máximo (graus) de cada cidade do sistema
+const _CIDADES_GEO = {
+    "Santo Ângelo":           { lat: -28.2994, lng: -54.2628, r: 0.15 },
+    "Giruá":                  { lat: -28.0319, lng: -54.3533, r: 0.12 },
+    "Cerro Largo":            { lat: -28.1497, lng: -54.7394, r: 0.12 },
+    "São Miguel das Missões": { lat: -28.5578, lng: -54.5567, r: 0.12 },
+    "Entre-Ijuís":            { lat: -28.3447, lng: -54.2975, r: 0.10 },
+    "Guarani das Missões":    { lat: -28.1378, lng: -54.5636, r: 0.10 },
+    "Salvador das Missões":   { lat: -28.1078, lng: -54.8453, r: 0.10 },
+    "Ubiretama":              { lat: -27.9658, lng: -54.6253, r: 0.10 },
+    "Sete de Setembro":       { lat: -27.9733, lng: -54.8683, r: 0.08 },
+    "Eugênio de Castro":      { lat: -28.0139, lng: -54.1500, r: 0.08 },
+    "Vitória das Missões":    { lat: -28.1722, lng: -54.4208, r: 0.08 },
+    "Senador Salgado Filho":  { lat: -27.9364, lng: -54.6833, r: 0.08 }
+};
+
 async function _geocode(end, cid) {
+    const geo = _CIDADES_GEO[cid];
+
+    // Monta a query com o nome da cidade explícito
+    const query = end + ', ' + cid + ', Rio Grande do Sul, Brasil';
+
+    // Se temos coordenadas da cidade, usa viewbox para restringir a busca
+    let url = 'https://nominatim.openstreetmap.org/search?format=json&limit=5&addressdetails=1&q='
+        + encodeURIComponent(query);
+
+    if (geo) {
+        // viewbox: minLng, minLat, maxLng, maxLat (área da cidade + margem)
+        const m = geo.r;
+        url += '&viewbox=' + (geo.lng-m) + ',' + (geo.lat-m) + ',' + (geo.lng+m) + ',' + (geo.lat+m);
+        url += '&bounded=1'; // força resultados dentro do viewbox
+    }
+
     try {
-        const r = await fetch('https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(end + ', ' + cid + ', RS, Brasil') + '&limit=1');
-        const d = await r.json();
-        if (d[0]) return { lat: +d[0].lat, lng: +d[0].lon };
+        const r = await fetch(url, { headers: { 'Accept-Language': 'pt-BR' } });
+        const resultados = await r.json();
+
+        if (resultados.length > 0) {
+            // Verifica qual resultado está mais perto do centro da cidade
+            if (geo) {
+                let melhor = null, menorDist = Infinity;
+                for (const res of resultados) {
+                    const dlat = +res.lat - geo.lat;
+                    const dlng = +res.lon - geo.lng;
+                    const dist = Math.sqrt(dlat*dlat + dlng*dlng);
+                    if (dist < menorDist) { menorDist = dist; melhor = res; }
+                }
+                // Aceita só se estiver dentro do raio da cidade
+                if (melhor && menorDist <= geo.r * 2) {
+                    return { lat: +melhor.lat, lng: +melhor.lon };
+                }
+            } else {
+                return { lat: +resultados[0].lat, lng: +resultados[0].lon };
+            }
+        }
+
+        // Fallback: tenta só o nome da rua + estado (sem bounded)
+        const url2 = 'https://nominatim.openstreetmap.org/search?format=json&limit=3&q='
+            + encodeURIComponent(end + ', ' + cid + ', RS');
+        const r2 = await fetch(url2, { headers: { 'Accept-Language': 'pt-BR' } });
+        const res2 = await r2.json();
+        if (res2.length > 0 && geo) {
+            for (const res of res2) {
+                const dlat = +res.lat - geo.lat;
+                const dlng = +res.lon - geo.lng;
+                if (Math.sqrt(dlat*dlat + dlng*dlng) <= geo.r * 3) {
+                    return { lat: +res.lat, lng: +res.lon };
+                }
+            }
+        }
     } catch(e) {}
+
+    // Último fallback: centro da cidade
+    if (geo) return { lat: geo.lat, lng: geo.lng };
     return { lat: -28.2865, lng: -54.2644 };
 }
+
 
 // Gera o código do bookmarklet
 function _speGerarBookmarklet() {
