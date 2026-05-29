@@ -496,8 +496,22 @@ async function _fbClearCollection(coll) {
 // ─── Inicialização assíncrona ───
 async function initApp() {
     setLoadingMsg('Conectando ao Firebase...');
+
+    // Fallback: se Firebase não responder em 5s, entra em modo offline imediatamente
+    const fallbackTimer = setTimeout(() => {
+        fbConnected = false;
+        users   = loadUsers();
+        victims = loadVictims();
+        const ov = document.getElementById('loading-overlay');
+        ov.style.opacity = '0';
+        setTimeout(() => { ov.style.display = 'none'; }, 400);
+        document.getElementById('login-screen').style.display = 'flex';
+        populateCitySelects();
+        addLog('SISTEMA', '💾 Modo offline (Firebase indisponível)', 'SISTEMA');
+    }, 5000);
+
     const fbTimeout = new Promise((_, rej) =>
-        setTimeout(() => rej(new Error('Timeout Firebase')), 8000)
+        setTimeout(() => rej(new Error('Timeout Firebase')), 10000)
     );
     try {
         const [usersSnap, victimsSnap] = await Promise.race([
@@ -507,6 +521,7 @@ async function initApp() {
             ]),
             fbTimeout
         ]);
+        clearTimeout(fallbackTimer);
         fbConnected = true;
         setLoadingMsg('Sincronizando dados...');
 
