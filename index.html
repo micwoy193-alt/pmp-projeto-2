@@ -810,6 +810,8 @@ function startApp() {
 
     renderVictims();
     setTimeout(() => { initMapMain(); initMapSelect(); }, 350);
+    // Registra listener de mensagens do SPE uma única vez
+    _speRegistrarListener();
 }
 
 // ═══════════════════════════════════════════════
@@ -1952,35 +1954,48 @@ function _speGerarBookmarklet() {
 function _speIniciarListener() {
     var link = document.getElementById('spe-bookmarklet');
     if (link) link.href = _speGerarBookmarklet();
+}
 
-    // Ouve mensagens vindas da janela popup do SPE
-    window.addEventListener('message', async function onSpeMsg(ev) {
+// Listener global de mensagens do SPE — registrado uma única vez no início
+window._speListenerAtivo = false;
+function _speRegistrarListener() {
+    if (window._speListenerAtivo) return;
+    window._speListenerAtivo = true;
+
+    window.addEventListener('message', async function(ev) {
         var msg = ev.data;
         if (!msg || !msg.tipo) return;
+        // Só processa mensagens do SPE
+        if (!['spe_inicio','spe_item','spe_concluido'].includes(msg.tipo)) return;
+
+        console.log('[SPE]', msg.tipo, msg.atual || '', msg.dados?.nome || '');
 
         if (msg.tipo === 'spe_inicio') {
-            document.getElementById('spe-painel').style.display = 'block';
-            document.getElementById('spe-log-box').innerHTML = '';
-            speProgresso(0, msg.total, 'Iniciando importa\u00e7\u00e3o...');
-            speLog('\uD83D\uDDC3\uFE0F Carregando base atual...', 'info');
+            // Garante que o painel aparece mesmo se usuário não estiver na aba SPE
+            var painel = document.getElementById('spe-painel');
+            if (painel) painel.style.display = 'block';
+            var logBox = document.getElementById('spe-log-box');
+            if (logBox) logBox.innerHTML = '';
+            speProgresso(0, msg.total, 'Iniciando importação...');
+            speLog('🗃️ Carregando base atual...', 'info');
 
-            // Carrega CPFs existentes
             var snap = await db.collection('victims').get();
             window._speCpfsExist = new Set(snap.docs.map(function(d){ return (d.data().cpf||'').replace(/\D/g,''); }).filter(Boolean));
             window._speImportados = [];
             window._speIgnorados = [];
             window._speErros = [];
-            speLog('\uD83D\uDDC3\uFE0F ' + window._speCpfsExist.size + ' j\u00e1 cadastradas.', 'info');
+            speLog('🗃️ ' + window._speCpfsExist.size + ' já cadastradas.', 'info');
         }
 
         if (msg.tipo === 'spe_item') {
             var d = msg.dados;
+            if (!d || !d.nome) return;
             var delay = function(ms){ return new Promise(function(r){setTimeout(r,ms);}); };
-            speProgresso(msg.atual, msg.total, msg.atual + '/' + msg.total + ' \u2014 ' + d.nome);
+            speProgresso(msg.atual, msg.total, msg.atual + '/' + msg.total + ' — ' + d.nome);
 
             var cpfL = (d.cpf||'').replace(/\D/g,'');
             if (cpfL && window._speCpfsExist && window._speCpfsExist.has(cpfL)) {
-                speLog('\u23ED ' + d.nome + ' \u2014 j\u00e1 cadastrada', 'skip');
+                speLog('⏭ ' + d.nome + ' — já cadastrada', 'skip');
                 window._speIgnorados.push(d.nome);
                 return;
             }
@@ -1991,37 +2006,32 @@ function _speIniciarListener() {
 
             var v = {
                 id: Date.now() + Math.random(),
-                city: cidade,
-                v_nome: d.nome,
-                rua: d.endV || 'Endere\u00e7o n\u00e3o informado',
-                a_nome: d.autor || 'N\u00e3o identificado',
-                a_rg: d.cpf || d.rg || '',
-                a_rua: '',
-                valid: d.vd,
-                dist: 300,
+                city: cidade, v_nome: d.nome,
+                rua: d.endV || 'Endereço não informado',
+                a_nome: d.autor || 'Não identificado',
+                a_rg: d.cpf || d.rg || '', a_rua: '',
+                valid: d.vd, dist: 300,
                 foto: 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png',
-                lat: coords.lat,
-                lng: coords.lng,
+                lat: coords.lat, lng: coords.lng,
                 geo_impreciso: coords.geo_impreciso || false,
-                cpf: d.cpf || '',
-                rg: d.rg || '',
-                telefone: d.tel || '',
-                numMpu: d.mpu || '',
+                cpf: d.cpf||'', rg: d.rg||'', telefone: d.tel||'', numMpu: d.mpu||'',
                 obs: 'Importado SPE ' + new Date().toLocaleDateString('pt-BR'),
-                createdBy: curUser.id,
-                createdAt: new Date().toISOString()
+                createdBy: curUser ? curUser.id : 'spe',
+                createdAt: new Date().toISOString(),
+                _secret: APP_SECRET
             };
 
             try {
                 await db.collection('victims').doc(String(v.id)).set(v);
-                if (fbConnected) _fbAddVictim(v);
+                _fbAddVictim(v);
                 if (window._speCpfsExist) window._speCpfsExist.add(cpfL);
                 window._speImportados.push(d.nome);
-                addLog('VICTIM', 'SPE: ' + d.nome + ' \u2014 ' + cidade, curUser.id);
-                speLog('\u2705 ' + d.nome + ' \u2192 ' + cidade, 'ok');
+                if (curUser) addLog('VICTIM', 'SPE: ' + d.nome + ' — ' + cidade, curUser.id);
+                speLog('✅ ' + d.nome + ' → ' + cidade, 'ok');
             } catch(e) {
                 window._speErros.push(d.nome);
-                speLog('\u274C Erro: ' + d.nome, 'err');
+                speLog('❌ Erro ao salvar: ' + d.nome + ' (' + e.message + ')', 'err');
+                console.error('[SPE] Erro Firebase:', e);
             }
         }
 
@@ -2029,14 +2039,17 @@ function _speIniciarListener() {
             var imp = (window._speImportados||[]).length;
             var ign = (window._speIgnorados||[]).length;
             var err = (window._speErros||[]).length;
-            speProgresso(100, 100, 'Conclu\u00eddo!');
-            speLog('\n\u2550\u2550\u2550 RESUMO \u2550\u2550\u2550', 'info');
-            speLog('\u2705 Importadas: ' + imp, 'ok');
-            speLog('\u23ED J\u00e1 existiam: ' + ign, 'skip');
-            speLog('\u274C Erros: ' + err, 'err');
+            speProgresso(100, 100, 'Concluído!');
+            speLog('\n═══ RESUMO ═══', 'info');
+            speLog('✅ Importadas: ' + imp, 'ok');
+            speLog('⏭ Já existiam: ' + ign, 'skip');
+            speLog('❌ Erros: ' + err, 'err');
             renderVictims();
             renderMarkersOnMap();
-            alert('\u2705 Importa\u00e7\u00e3o conclu\u00edda!\n\n\u2705 ' + imp + ' importadas\n\u23ED ' + ign + ' j\u00e1 existiam\n\u274C ' + err + ' erros');
+            // Alerta mesmo se usuário estiver em outra aba
+            setTimeout(function() {
+                alert('✅ Importação concluída!\n\n✅ ' + imp + ' importadas\n⏭ ' + ign + ' já existiam\n❌ ' + err + ' erros');
+            }, 300);
         }
     });
 }
