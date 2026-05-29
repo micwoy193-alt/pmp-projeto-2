@@ -1962,13 +1962,11 @@ function _speRegistrarListener() {
     if (window._speListenerAtivo) return;
     window._speListenerAtivo = true;
 
-    window.addEventListener('message', async function(ev) {
-        var msg = ev.data;
+    // Processa mensagem recebida (postMessage ou BroadcastChannel)
+    async function processarMsg(msg) {
         if (!msg || !msg.tipo) return;
-        // Só processa mensagens do SPE
         if (!['spe_inicio','spe_item','spe_concluido'].includes(msg.tipo)) return;
-
-        console.log('[SPE]', msg.tipo, msg.atual || '', msg.dados?.nome || '');
+        console.log('[SPE]', msg.tipo, msg.atual||'', msg.dados?.nome||'');
 
         if (msg.tipo === 'spe_inicio') {
             // Garante que o painel aparece mesmo se usuário não estiver na aba SPE
@@ -2051,7 +2049,16 @@ function _speRegistrarListener() {
                 alert('✅ Importação concluída!\n\n✅ ' + imp + ' importadas\n⏭ ' + ign + ' já existiam\n❌ ' + err + ' erros');
             }, 300);
         }
-    });
+    } // fecha processarMsg
+
+    // Listener postMessage (popup/opener)
+    window.addEventListener('message', function(ev) { processarMsg(ev.data); });
+
+    // BroadcastChannel (aba normal — mesmo navegador)
+    try {
+        var bc = new BroadcastChannel('spe_patrulha');
+        bc.onmessage = function(ev) { processarMsg(ev.data); };
+    } catch(e) {}
 }
 
 
