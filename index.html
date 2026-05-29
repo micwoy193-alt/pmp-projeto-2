@@ -368,14 +368,15 @@
 
     <!-- ABA SPE -->
     <div id="sec-spe" class="content">
-        <div style="background:linear-gradient(90deg,#2D0B5A,#6B35A8);padding:10px 12px;border-radius:12px;margin-bottom:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
-            <span style="color:white;font-size:12px;font-weight:bold;flex:1;">🔗 SPE — Brigada Militar RS</span>
-            <button onclick="speNavegar('https://spe.bm.rs.gov.br/pmp/vitimas')" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:white;padding:6px 12px;border-radius:8px;font-size:11px;font-weight:bold;cursor:pointer;">👥 Vítimas</button>
-            <button onclick="speNavegar('https://spe.bm.rs.gov.br/pmp/login')" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:white;padding:6px 10px;border-radius:8px;font-size:11px;cursor:pointer;">🔄 Login</button>
-            <button onclick="speIniciarImportacao()" style="background:#2E7D32;border:none;color:white;padding:6px 16px;border-radius:8px;font-size:11px;font-weight:bold;cursor:pointer;">⬇️ IMPORTAR PARA O SISTEMA</button>
+
+        <!-- Cabeçalho -->
+        <div style="background:linear-gradient(90deg,#2D0B5A,#6B35A8);padding:14px 16px;border-radius:14px;margin-bottom:12px;">
+            <div style="color:white;font-size:15px;font-weight:bold;margin-bottom:4px;">🔗 Integração com o SPE</div>
+            <div style="color:rgba(255,255,255,0.75);font-size:12px;">Sistema de Patrulha e Escolta — Brigada Militar RS</div>
         </div>
 
-        <div id="spe-painel" style="display:none;background:#fff;border:1.5px solid #6B35A8;border-radius:12px;padding:12px;margin-bottom:10px;">
+        <!-- Painel de progresso (oculto por padrão) -->
+        <div id="spe-painel" style="display:none;background:#fff;border:1.5px solid #6B35A8;border-radius:12px;padding:12px;margin-bottom:12px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
                 <span style="font-size:12px;font-weight:bold;color:#6B35A8;">📥 Importação em andamento</span>
                 <button onclick="document.getElementById('spe-painel').style.display='none'" style="background:none;border:none;font-size:18px;cursor:pointer;color:#aaa;">✕</button>
@@ -387,23 +388,40 @@
             <div id="spe-log-box" style="max-height:150px;overflow-y:auto;font-size:10px;font-family:monospace;background:#f5f5f5;border-radius:8px;padding:8px;color:#333;white-space:pre;"></div>
         </div>
 
-        <div id="spe-aviso" style="display:none;background:#FFF3E0;border:1px solid #FFB300;border-radius:12px;padding:14px;margin-bottom:10px;font-size:13px;color:#5D4037;">
-            <b>⚠️ O SPE bloqueou a exibição dentro do site (proteção do servidor do governo).</b><br><br>
-            Para importar mesmo assim:<br>
-            <ol style="margin:8px 0 0 18px;font-size:12px;line-height:1.8;">
-                <li>Abra o SPE em outra aba: <a href="https://spe.bm.rs.gov.br/pmp/vitimas" target="_blank" style="color:#6B35A8;font-weight:bold;">clique aqui</a></li>
-                <li>Faça login e vá até Vítimas</li>
-                <li>Clique no bookmarklet <b>"🚔 Importar SPE → Patrulha"</b> da barra de favoritos</li>
-            </ol>
+        <!-- Passo 1 -->
+        <div class="card">
+            <div class="card-title">📌 Passo 1 — Abrir o SPE</div>
+            <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">O SPE não permite ser aberto dentro deste site (bloqueio de segurança do servidor). Clique no botão abaixo para abrir o SPE numa janela separada.</p>
+            <button onclick="speAbrirPopup()" style="width:100%;padding:13px;background:linear-gradient(90deg,#2D0B5A,#6B35A8);color:white;border:none;border-radius:11px;font-size:14px;font-weight:bold;cursor:pointer;">🌐 ABRIR SPE EM NOVA JANELA</button>
         </div>
 
-        <div style="border-radius:12px;overflow:hidden;border:1.5px solid var(--border);">
-            <iframe id="iframe-spe"
-                src="about:blank"
-                style="width:100%;height:calc(100vh - 210px);min-height:500px;border:none;display:block;"
-                title="SPE Brigada Militar">
-            </iframe>
+        <!-- Passo 2 -->
+        <div class="card">
+            <div class="card-title">📌 Passo 2 — Adicionar o bookmarklet</div>
+            <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">Arraste o botão abaixo para a <b>barra de favoritos</b> do seu navegador. Só precisa fazer isso uma vez.</p>
+            <div style="background:#f5f0ff;border:1.5px dashed #6B35A8;border-radius:11px;padding:14px;display:flex;align-items:center;gap:12px;">
+                <a id="spe-bookmarklet" href="#" style="display:inline-flex;align-items:center;gap:6px;padding:11px 18px;background:#6B35A8;color:white;border-radius:10px;font-size:13px;font-weight:bold;text-decoration:none;white-space:nowrap;cursor:grab;">
+                    🚔 Importar SPE → Patrulha
+                </a>
+                <span style="font-size:12px;color:#6B35A8;">← Arraste este botão para a barra de favoritos</span>
+            </div>
         </div>
+
+        <!-- Passo 3 -->
+        <div class="card">
+            <div class="card-title">📌 Passo 3 — Importar as vítimas</div>
+            <ol style="font-size:13px;color:var(--muted);line-height:2;padding-left:18px;">
+                <li>Na janela do SPE, faça login com suas credenciais</li>
+                <li>Navegue até a tela de <b>Vítimas</b></li>
+                <li>Aplique o filtro de OPM desejado</li>
+                <li>Clique no favorito <b>"🚔 Importar SPE → Patrulha"</b></li>
+                <li>Acompanhe o progresso aqui nesta tela</li>
+            </ol>
+            <div style="margin-top:12px;padding:10px;background:#E8F5E9;border-radius:10px;font-size:12px;color:#2E7D32;">
+                ✅ As vítimas serão cadastradas automaticamente com endereço geocodificado e aparecerão no mapa em tempo real.
+            </div>
+        </div>
+
     </div>
 
     <!-- ABA USUÁRIOS (gestor + master) -->
@@ -1525,7 +1543,7 @@ function switchTab(id, btn) {
     if (id === 'admin') { setTimeout(() => { if (mapS) mapS.invalidateSize(); }, 200); }
     if (id === 'users') { renderPending(); renderUsers(); }
     if (id === 'audit') { renderAudit(); }
-    if (id === 'lista') { renderVictims(); }
+    if (id === 'spe') { _speIniciarListener(); }
     if (id === 'agressores') {
         document.getElementById('agressores-grid').style.display  = agressorView === 'grade' ? '' : 'none';
         document.getElementById('agressores-lista').style.display = agressorView === 'lista' ? '' : 'none';
@@ -1664,44 +1682,27 @@ function saveEdit() {
 //  INICIALIZAÇÃO
 // ═══════════════════════════════════════════════
 // ═══════════════════════════════════════════════
-//  INTEGRAÇÃO SPE
+//  INTEGRAÇÃO SPE — popup + bookmarklet
 // ═══════════════════════════════════════════════
 
-let _speIframeCarregado = false;
+let _spePopup = null;
 
-function speNavegar(url) {
-    const iframe = document.getElementById('iframe-spe');
-    if (!iframe) return;
-    _speIframeCarregado = false;
-    iframe.style.display = 'block';
-    document.getElementById('spe-aviso').style.display = 'none';
-    iframe.onload = () => {
-        _speIframeCarregado = true;
-        // Testa acesso ao DOM — se jogar erro é cross-origin (SPE carregou mas isolado)
-        try {
-            const doc = iframe.contentDocument || iframe.contentWindow.document;
-            if (doc && doc.body) {
-                // Conseguiu acessar — injeta helper de comunicação
-                iframe.contentWindow.eval(`
-                    window.addEventListener('message', function(e) {
-                        if (e.data && e.data.acao === 'executar') {
-                            try { eval(e.data.script); } catch(err) { console.error(err); }
-                        }
-                    });
-                `);
-            }
-        } catch(e) {
-            // Cross-origin: SPE carregou visualmente mas JS bloqueado — esperado
-        }
-    };
-    iframe.src = url;
+function speAbrirPopup() {
+    _spePopup = window.open(
+        'https://spe.bm.rs.gov.br/pmp/login',
+        'spe_janela',
+        'width=1100,height=720,scrollbars=yes,resizable=yes'
+    );
+    if (!_spePopup) {
+        alert('⚠️ Pop-up bloqueada!\nClique no ícone de bloqueio na barra de endereços e permita pop-ups para este site.');
+    }
 }
 
 function speLog(msg, tipo) {
     const box = document.getElementById('spe-log-box');
     if (!box) return;
     const cor = tipo==='ok'?'#2E7D32': tipo==='skip'?'#999': tipo==='err'?'#C62828':'#444';
-    box.innerHTML += `<span style="color:${cor}">${msg}</span>\n`;
+    box.innerHTML += '<span style="color:' + cor + '">' + msg + '</span>\n';
     box.scrollTop = box.scrollHeight;
 }
 
@@ -1709,7 +1710,7 @@ function speProgresso(atual, total, txt) {
     const b = document.getElementById('spe-barra');
     const t = document.getElementById('spe-prog-txt');
     if (b) b.style.width = (total > 0 ? Math.round(atual/total*100) : 0) + '%';
-    if (t) t.textContent = txt || `${atual} de ${total}`;
+    if (t) t.textContent = txt || (atual + ' de ' + total);
 }
 
 const _CIDADES = ["Salvador das Missões","Ubiretama","Sete de Setembro","Eugênio de Castro","Vitória das Missões","Senador Salgado Filho","Giruá","São Miguel das Missões","Entre-Ijuís","Guarani das Missões","Cerro Largo","Santo Ângelo"];
@@ -1725,163 +1726,145 @@ function _detCidade(txt) {
 
 async function _geocode(end, cid) {
     try {
-        const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(end+', '+cid+', RS, Brasil')}&limit=1`);
+        const r = await fetch('https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(end + ', ' + cid + ', RS, Brasil') + '&limit=1');
         const d = await r.json();
         if (d[0]) return { lat: +d[0].lat, lng: +d[0].lon };
     } catch(e) {}
     return { lat: -28.2865, lng: -54.2644 };
 }
 
-// Script extrator que roda DENTRO do SPE (iframe ou popup)
-function _scriptExtrator() {
-    var s = '(async function speMpExtrator(){';
-    s += 'const dl=ms=>new Promise(r=>setTimeout(r,ms));';
-    s += 'const res=[];';
-    s += 'const sel="button[title=\'Visualizar detalhes da v\u00edtima\'],a[title=\'Visualizar detalhes da v\u00edtima\']";';
-    s += 'function lC(c,l){for(const e of c.querySelectorAll("*")){const t=(e.innerText||"").trim();if(t.toLowerCase().startsWith(l.toLowerCase())){const v=t.slice(l.length).replace(/^[:\\s]+/,"").trim();if(v.length>2)return v;}}return "";}';
-    s += 'async function lM(){await dl(1200);let m=null;for(let i=0;i<20;i++){m=document.querySelector(".modal.show,.modal[style*=\\"display: block\\"],[role=\\"dialog\\"]");if(m)break;await dl(200);}if(!m)return null;';
-    s += 'const nome=lC(m,"Nome"),cpf=lC(m,"CPF"),rg=lC(m,"RG"),tel=lC(m,"Telefone"),mpu=lC(m,"N\u00famero"),df=lC(m,"Data Fim"),autor=lC(m,"Autor");';
-    s += 'let endV="";m.querySelectorAll(".card,.card-body,.accordion-item,.accordion-body,.collapse.show,[class*=\\"mpu\\"]").forEach(function(b){if(!endV){const loc=lC(b,"Local");if(loc)endV=loc;}});';
-    s += 'if(!endV)m.querySelectorAll("p,span,div,li,td").forEach(function(e){if(endV)return;const t=(e.innerText||"").trim();if(/^local:/i.test(t))endV=t.replace(/^local:/i,"").trim().split("\\n")[0].trim();});';
-    s += 'let vd="";if(df){const p=df.replace(/\\s.*/,"").split("/");if(p.length===3)vd=p[2]+"-"+p[1].padStart(2,"0")+"-"+p[0].padStart(2,"0");}';
-    s += 'if(!vd){const d=new Date();d.setFullYear(d.getFullYear()+1);vd=d.toISOString().split("T")[0];}';
-    s += 'return{nome,cpf,rg,tel,mpu,vd,autor,endV};}';
-    s += 'function fM(){const b=document.querySelector(".modal.show .btn-close,.modal.show button[data-bs-dismiss=\\"modal\\"],.modal.show button[data-dismiss=\\"modal\\"],.modal.show .close");if(b)b.click();}';
-    s += 'let pan=document.getElementById("_spe_pan");';
-    s += 'if(!pan){pan=document.createElement("div");pan.id="_spe_pan";pan.style="position:fixed;bottom:16px;right:16px;z-index:99999;background:#2D0B5A;color:#fff;padding:14px 18px;border-radius:14px;font-size:12px;font-family:sans-serif;min-width:260px;box-shadow:0 8px 32px rgba(0,0,0,.5);";document.body.appendChild(pan);}';
-    s += 'function ui(t,p){pan.innerHTML="<b>\uD83D\uDE94 Importando...</b><div style=\\"margin-top:5px;font-size:11px;opacity:.85\\">"+t+"</div><div style=\\"background:rgba(255,255,255,.2);border-radius:6px;height:5px;margin-top:8px;overflow:hidden\\"><div style=\\"height:100%;background:#9058CC;width:"+p+"%;transition:width .4s;border-radius:6px\\"></div></div>";}';
-    s += 'function notify(tipo,dados,atual,total){try{window.parent.postMessage({tipo:tipo,dados:dados,atual:atual,total:total},"*");}catch(e){}try{if(window.opener)window.opener.postMessage({tipo:tipo,dados:dados,atual:atual,total:total},"*");}catch(e){}}';
-    s += 'let pag=1;';
+// Gera o código do bookmarklet
+function _speGerarBookmarklet() {
+    var s = '(async function speBM(){';
+    s += 'var dl=function(ms){return new Promise(function(r){setTimeout(r,ms);});};';
+    s += 'var res=[];';
+    s += 'var sel="button[title=\'Visualizar detalhes da v\u00edtima\'],a[title=\'Visualizar detalhes da v\u00edtima\']";';
+    s += 'function lC(c,l){var els=c.querySelectorAll("*");for(var i=0;i<els.length;i++){var t=(els[i].innerText||"").trim();if(t.toLowerCase().startsWith(l.toLowerCase())){var v=t.slice(l.length).replace(/^[:\\s]+/,"").trim();if(v.length>2)return v;}}return "";}';
+    s += 'async function lM(){await dl(1200);var m=null;for(var i=0;i<20;i++){m=document.querySelector(".modal.show,.modal[style*=\'display: block\'],[role=\'dialog\']");if(m)break;await dl(200);}if(!m)return null;';
+    s += 'var nome=lC(m,"Nome"),cpf=lC(m,"CPF"),rg=lC(m,"RG"),tel=lC(m,"Telefone"),mpu=lC(m,"N\u00famero"),df=lC(m,"Data Fim"),autor=lC(m,"Autor");';
+    s += 'var endV="";var bs=m.querySelectorAll(".card,.card-body,.accordion-item,.accordion-body,.collapse.show");for(var i=0;i<bs.length;i++){if(!endV){var loc=lC(bs[i],"Local");if(loc)endV=loc;}}';
+    s += 'if(!endV){var els=m.querySelectorAll("p,span,div,li,td");for(var i=0;i<els.length;i++){if(endV)break;var t=(els[i].innerText||"").trim();if(/^local:/i.test(t))endV=t.replace(/^local:/i,"").trim().split("\\n")[0].trim();}}';
+    s += 'var vd="";if(df){var p=df.replace(/\\s.*/,"").split("/");if(p.length===3)vd=p[2]+"-"+p[1].padStart(2,"0")+"-"+p[0].padStart(2,"0");}';
+    s += 'if(!vd){var d=new Date();d.setFullYear(d.getFullYear()+1);vd=d.toISOString().split("T")[0];}';
+    s += 'return{nome:nome,cpf:cpf,rg:rg,tel:tel,mpu:mpu,vd:vd,autor:autor,endV:endV};}';
+    s += 'function fM(){var b=document.querySelector(".modal.show .btn-close,.modal.show button[data-bs-dismiss=\'modal\'],.modal.show .close");if(b)b.click();}';
+    s += 'var pan=document.createElement("div");pan.style="position:fixed;bottom:16px;right:16px;z-index:99999;background:#2D0B5A;color:#fff;padding:14px 18px;border-radius:14px;font-size:12px;font-family:sans-serif;min-width:260px;box-shadow:0 8px 32px rgba(0,0,0,.5);";document.body.appendChild(pan);';
+    s += 'function ui(t,p){pan.innerHTML="<b>\uD83D\uDE94 Importando...</b><div style=\'margin-top:5px;font-size:11px;opacity:.85\'>"+t+"</div><div style=\'background:rgba(255,255,255,.2);border-radius:6px;height:5px;margin-top:8px;overflow:hidden\'><div style=\'height:100%;background:#9058CC;width:"+p+"%;border-radius:6px\'></div></div>";}';
+    s += 'function notify(tipo,dados,atual,total){try{window.opener.postMessage({tipo:tipo,dados:dados,atual:atual,total:total},"*");}catch(e){}}';
+    s += 'var pag=1;';
     s += 'while(true){';
-    s += 'const tot=document.querySelectorAll(sel).length;';
-    s += 'if(!tot)break;';
+    s += 'var tot=document.querySelectorAll(sel).length;';
+    s += 'if(!tot){alert("Nenhuma v\u00edtima encontrada. Navegue at\u00e9 a tela de V\u00edtimas no SPE.");break;}';
     s += 'notify("spe_inicio",null,0,tot);';
-    s += 'for(let i=0;i<tot;i++){';
-    s += 'const btn=document.querySelectorAll(sel)[i];if(!btn)continue;';
-    s += 'btn.click();const d=await lM();fM();await dl(750);';
+    s += 'for(var i=0;i<tot;i++){';
+    s += 'var btn=document.querySelectorAll(sel)[i];if(!btn)continue;';
+    s += 'btn.click();var d=await lM();fM();await dl(750);';
     s += 'if(d&&d.nome){res.push(d);ui(d.nome,Math.round((i+1)/tot*100));notify("spe_item",d,res.length,tot);}';
     s += '}';
-    s += 'const bP=[...document.querySelectorAll(".pagination .page-item a,.pagination a.page-link")].find(function(a){return /pr\u00f3ximo|next|\u203a|\u00bb/i.test(a.innerText);});';
-    s += 'const dis=(bP&&bP.closest("li")&&bP.closest("li").classList.contains("disabled"))||(bP&&bP.classList.contains("disabled"));';
+    s += 'var bP=Array.from(document.querySelectorAll(".pagination .page-item a,.pagination a.page-link")).find(function(a){return /pr\u00f3ximo|next|\u203a|\u00bb/i.test(a.innerText);});';
+    s += 'var dis=bP&&(bP.closest("li")&&bP.closest("li").classList.contains("disabled")||bP.classList.contains("disabled"));';
     s += 'if(!bP||dis)break;';
     s += 'bP.click();await dl(2000);pag++;';
     s += '}';
     s += 'notify("spe_concluido",null,res.length,res.length);';
-    s += 'pan.innerHTML="<b>\u2705 "+res.length+" enviadas ao sistema!</b>";';
-    s += 'setTimeout(function(){pan.remove();},4000);';
+    s += 'pan.innerHTML="<b>\u2705 "+res.length+" v\u00edtimas enviadas!</b><div style=\'font-size:11px;margin-top:4px;opacity:.8\'>Volte ao site da Patrulha para acompanhar.</div>";';
+    s += 'setTimeout(function(){pan.remove();},5000);';
     s += '})();';
-    return s;
+    return 'javascript:' + s;
 }
 
-async function speIniciarImportacao() {
-    const delay = ms => new Promise(r => setTimeout(r, ms));
-    const iframe = document.getElementById('iframe-spe');
-    const painel = document.getElementById('spe-painel');
-    const logBox = document.getElementById('spe-log-box');
+// Injeta o href do bookmarklet no link quando a aba SPE for aberta
+function _speIniciarListener() {
+    var link = document.getElementById('spe-bookmarklet');
+    if (link) link.href = _speGerarBookmarklet();
 
-    painel.style.display = 'block';
-    logBox.innerHTML = '';
-    speProgresso(0,1,'Iniciando...');
-
-    // ── Tenta injetar no iframe ──
-    let injetou = false;
-    try {
-        iframe.contentWindow.eval(_scriptExtrator());
-        injetou = true;
-        speLog('✅ Script injetado no iframe.','ok');
-    } catch(e) {
-        speLog('⚠️ Iframe bloqueado por cross-origin. Tentando popup...','err');
-    }
-
-    // ── Fallback: popup ──
-    if (!injetou) {
-        const popup = window.open('https://spe.bm.rs.gov.br/pmp/vitimas','spe_win','width=1100,height=720,scrollbars=yes');
-        if (!popup) {
-            speLog('❌ Popup bloqueada. Libere pop-ups para este site.','err');
-            document.getElementById('spe-aviso').style.display = 'block';
-            return;
-        }
-        speLog('⏳ Aguardando SPE carregar (12s)...','info');
-        await delay(12000);
-        try {
-            popup.eval(_scriptExtrator());
-            injetou = true;
-            speLog('✅ Script injetado na popup.','ok');
-        } catch(e2) {
-            speLog('❌ SPE bloqueou injeção (X-Frame-Options). Use o bookmarklet.','err');
-            document.getElementById('spe-aviso').style.display = 'block';
-            popup.close();
-            return;
-        }
-    }
-
-    // ── Carrega CPFs existentes ──
-    const snap = await db.collection('victims').get();
-    const cpfsExist = new Set(snap.docs.map(d=>(d.data().cpf||'').replace(/\D/g,'')).filter(Boolean));
-    speLog(`🗃️ ${cpfsExist.size} vítimas já no sistema.`,'info');
-
-    const importados=[], ignorados=[], erros=[];
-
-    // ── Ouve mensagens do script ──
-    async function onMsg(ev) {
-        const msg = ev.data;
+    // Ouve mensagens vindas da janela popup do SPE
+    window.addEventListener('message', async function onSpeMsg(ev) {
+        var msg = ev.data;
         if (!msg || !msg.tipo) return;
 
         if (msg.tipo === 'spe_inicio') {
-            speProgresso(0, msg.total, `Processando ${msg.total} vítimas...`);
+            document.getElementById('spe-painel').style.display = 'block';
+            document.getElementById('spe-log-box').innerHTML = '';
+            speProgresso(0, msg.total, 'Iniciando importa\u00e7\u00e3o...');
+            speLog('\uD83D\uDDC3\uFE0F Carregando base atual...', 'info');
+
+            // Carrega CPFs existentes
+            var snap = await db.collection('victims').get();
+            window._speCpfsExist = new Set(snap.docs.map(function(d){ return (d.data().cpf||'').replace(/\D/g,''); }).filter(Boolean));
+            window._speImportados = [];
+            window._speIgnorados = [];
+            window._speErros = [];
+            speLog('\uD83D\uDDC3\uFE0F ' + window._speCpfsExist.size + ' j\u00e1 cadastradas.', 'info');
         }
 
         if (msg.tipo === 'spe_item') {
-            const d = msg.dados;
-            speProgresso(msg.atual, msg.total, `${msg.atual}/${msg.total} — ${d.nome}`);
-            const cpfL = (d.cpf||'').replace(/\D/g,'');
-            if (cpfL && cpfsExist.has(cpfL)) {
-                speLog(`⏭ ${d.nome} — já cadastrada`,'skip');
-                ignorados.push(d.nome); return;
+            var d = msg.dados;
+            var delay = function(ms){ return new Promise(function(r){setTimeout(r,ms);}); };
+            speProgresso(msg.atual, msg.total, msg.atual + '/' + msg.total + ' \u2014 ' + d.nome);
+
+            var cpfL = (d.cpf||'').replace(/\D/g,'');
+            if (cpfL && window._speCpfsExist && window._speCpfsExist.has(cpfL)) {
+                speLog('\u23ED ' + d.nome + ' \u2014 j\u00e1 cadastrada', 'skip');
+                window._speIgnorados.push(d.nome);
+                return;
             }
-            const cidade = _detCidade(d.endV);
-            const {lat,lng} = d.endV ? await _geocode(d.endV, cidade) : {lat:-28.2865,lng:-54.2644};
+
+            var cidade = _detCidade(d.endV);
+            var coords = d.endV ? await _geocode(d.endV, cidade) : { lat: -28.2865, lng: -54.2644 };
             await delay(600);
-            const v = {
-                id: Date.now()+Math.random(),
-                city: cidade, v_nome: d.nome,
-                rua: d.endV||'Endereço não informado',
-                a_nome: d.autor||'Não identificado',
-                a_rg: d.cpf||d.rg||'', a_rua:'',
-                valid: d.vd, dist:300,
-                foto:'https://cdn-icons-png.flaticon.com/512/3135/3135715.png',
-                lat, lng, cpf:d.cpf||'', rg:d.rg||'',
-                telefone:d.tel||'', numMpu:d.mpu||'',
-                obs:'Importado SPE '+new Date().toLocaleDateString('pt-BR'),
-                createdBy: curUser.id, createdAt: new Date().toISOString()
+
+            var v = {
+                id: Date.now() + Math.random(),
+                city: cidade,
+                v_nome: d.nome,
+                rua: d.endV || 'Endere\u00e7o n\u00e3o informado',
+                a_nome: d.autor || 'N\u00e3o identificado',
+                a_rg: d.cpf || d.rg || '',
+                a_rua: '',
+                valid: d.vd,
+                dist: 300,
+                foto: 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png',
+                lat: coords.lat,
+                lng: coords.lng,
+                cpf: d.cpf || '',
+                rg: d.rg || '',
+                telefone: d.tel || '',
+                numMpu: d.mpu || '',
+                obs: 'Importado SPE ' + new Date().toLocaleDateString('pt-BR'),
+                createdBy: curUser.id,
+                createdAt: new Date().toISOString()
             };
+
             try {
                 await db.collection('victims').doc(String(v.id)).set(v);
-                if(fbConnected) _fbAddVictim(v);
-                cpfsExist.add(cpfL);
-                importados.push(d.nome);
-                addLog('VICTIM',`SPE: ${d.nome} — ${cidade}`,curUser.id);
-                speLog(`✅ ${d.nome} → ${cidade}`,'ok');
+                if (fbConnected) _fbAddVictim(v);
+                if (window._speCpfsExist) window._speCpfsExist.add(cpfL);
+                window._speImportados.push(d.nome);
+                addLog('VICTIM', 'SPE: ' + d.nome + ' \u2014 ' + cidade, curUser.id);
+                speLog('\u2705 ' + d.nome + ' \u2192 ' + cidade, 'ok');
             } catch(e) {
-                erros.push(d.nome);
-                speLog(`❌ Erro ao salvar: ${d.nome}`,'err');
+                window._speErros.push(d.nome);
+                speLog('\u274C Erro: ' + d.nome, 'err');
             }
         }
 
         if (msg.tipo === 'spe_concluido') {
-            window.removeEventListener('message', onMsg);
-            speProgresso(100,100,'Concluído!');
-            speLog(`\n═══ RESUMO ═══`,'info');
-            speLog(`✅ Importadas: ${importados.length}`,'ok');
-            speLog(`⏭ Já existiam: ${ignorados.length}`,'skip');
-            speLog(`❌ Erros: ${erros.length}`,'err');
+            var imp = (window._speImportados||[]).length;
+            var ign = (window._speIgnorados||[]).length;
+            var err = (window._speErros||[]).length;
+            speProgresso(100, 100, 'Conclu\u00eddo!');
+            speLog('\n\u2550\u2550\u2550 RESUMO \u2550\u2550\u2550', 'info');
+            speLog('\u2705 Importadas: ' + imp, 'ok');
+            speLog('\u23ED J\u00e1 existiam: ' + ign, 'skip');
+            speLog('\u274C Erros: ' + err, 'err');
             renderVictims();
             renderMarkersOnMap();
-            alert(`✅ Importação concluída!\n\n✅ ${importados.length} importadas\n⏭ ${ignorados.length} já existiam\n❌ ${erros.length} erros`);
+            alert('\u2705 Importa\u00e7\u00e3o conclu\u00edda!\n\n\u2705 ' + imp + ' importadas\n\u23ED ' + ign + ' j\u00e1 existiam\n\u274C ' + err + ' erros');
         }
-    }
-    window.addEventListener('message', onMsg);
-} // fecha speIniciarImportacao
+    });
+}
+
 
 initApp(); // inicia app com Firebase
 </script>
