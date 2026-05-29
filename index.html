@@ -1628,6 +1628,9 @@ function populateEditCidades() {
 
 function editV(id) { editAgressor(id); }
 
+// Mapa de edição
+let mapEdit = null, markerEdit = null;
+
 function editUsarLocalizacaoAtual() {
     if (!navigator.geolocation) return alert('GPS não disponível neste dispositivo.');
     navigator.geolocation.getCurrentPosition(function(pos) {
