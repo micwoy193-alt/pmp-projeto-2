@@ -471,6 +471,7 @@
 // ═══════════════════════════════════════════════
 //  FIREBASE — BANCO DE DADOS EM NUVEM
 // ═══════════════════════════════════════════════
+const APP_SECRET = "73422176e3b42f2d17a961a46a3c5074896f70ef7849845f1d65f36d087daf35";
 const firebaseConfig = {
     apiKey: "AIzaSyA0BnuIDl5LGdGex-G5eqFhxgSPOz945_g",
     authDomain: "patrulha-maria-penha-27.firebaseapp.com",
@@ -487,12 +488,12 @@ let fbConnected = false;
 async function _fbSaveUsers(userList) {
     try {
         const batch = db.batch();
-        userList.forEach(u => batch.set(db.collection('users').doc(String(u.id)), u));
+        userList.forEach(u => { u._secret = APP_SECRET; batch.set(db.collection('users').doc(String(u.id)), u); });
         await batch.commit();
     } catch(e) { console.warn('[Firebase] saveUsers:', e.message); }
 }
 async function _fbAddVictim(v) {
-    try { await db.collection('victims').doc(String(v.id)).set(v); }
+    try { v._secret = APP_SECRET; await db.collection('victims').doc(String(v.id)).set(v); }
     catch(e) { console.warn('[Firebase] addVictim:', e.message); }
 }
 async function _fbDeleteVictim(id) {
@@ -500,7 +501,7 @@ async function _fbDeleteVictim(id) {
     catch(e) { console.warn('[Firebase] deleteVictim:', e.message); }
 }
 async function _fbAddAudit(entry) {
-    try { await db.collection('audit').doc(String(entry.id)).set(entry); }
+    try { entry._secret = APP_SECRET; await db.collection('audit').doc(String(entry.id)).set(entry); }
     catch(e) { console.warn('[Firebase] addAudit:', e.message); }
 }
 async function _fbClearCollection(coll) {
@@ -570,7 +571,7 @@ async function initApp() {
             if (localVictims.length > 0) {
                 setLoadingMsg('Migrando medidas protetivas para a nuvem...');
                 const batch = db.batch();
-                localVictims.forEach(v => batch.set(db.collection('victims').doc(String(v.id)), v));
+                localVictims.forEach(v => { v._secret = APP_SECRET; batch.set(db.collection('victims').doc(String(v.id)), v); });
                 await batch.commit();
             }
         }
@@ -1044,7 +1045,7 @@ function updateUserPosition(pos) {
     // Publica posição no Firebase (tempo real — outros usuários verão)
     if (fbConnected && curUser) {
         const tsNow = Date.now();
-        db.collection('online_users').doc(String(curUser.id)).set({
+        db.collection('online_users').doc(String(curUser.id)).set({ _secret: APP_SECRET,
             id: curUser.id,
             name: curUser.name || curUser.id,
             rank: curUser.rank || '',
@@ -1741,6 +1742,7 @@ function saveEdit() {
         updatedAt: new Date().toISOString(), updatedBy: curUser.id };
     saveVictims(victims);
     if (fbConnected) {
+        victims[idx]._secret = APP_SECRET;
         db.collection('victims').doc(String(id)).set(victims[idx]).catch(e => console.warn(e));
     }
     addLog('VICTIM', `Medida protetiva editada: ${vnome} — Agressor: ${anome} — ${city}`, curUser.id);
