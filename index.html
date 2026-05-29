@@ -415,14 +415,15 @@
 
         <!-- Passo 2 -->
         <div class="card">
-            <div class="card-title">📌 Passo 2 — Adicionar o bookmarklet</div>
-            <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">Arraste o botão abaixo para a <b>barra de favoritos</b> do seu navegador. Só precisa fazer isso uma vez.</p>
-            <div style="background:#f5f0ff;border:1.5px dashed #6B35A8;border-radius:11px;padding:14px;display:flex;align-items:center;gap:12px;">
-                <a id="spe-bookmarklet" href="#" style="display:inline-flex;align-items:center;gap:6px;padding:11px 18px;background:#6B35A8;color:white;border-radius:10px;font-size:13px;font-weight:bold;text-decoration:none;white-space:nowrap;cursor:grab;">
+            <div class="card-title">📌 Passo 2 — Bookmarklet de importação</div>
+            <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">Arraste o botão abaixo para a <b>barra de favoritos</b> do navegador. Só precisa fazer isso <b>uma vez</b>.</p>
+            <div style="background:#f5f0ff;border:1.5px dashed #6B35A8;border-radius:11px;padding:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                <a id="spe-bookmarklet" href="#" style="display:inline-flex;align-items:center;gap:8px;padding:12px 20px;background:linear-gradient(135deg,#2D0B5A,#6B35A8);color:white;border-radius:10px;font-size:13px;font-weight:bold;text-decoration:none;white-space:nowrap;cursor:grab;box-shadow:0 4px 14px rgba(107,53,168,0.4);">
                     🚔 Importar SPE → Patrulha
                 </a>
-                <span style="font-size:12px;color:#6B35A8;">← Arraste este botão para a barra de favoritos</span>
+                <span style="font-size:12px;color:#6B35A8;flex:1;min-width:160px;">← Arraste para a barra de favoritos</span>
             </div>
+            <p style="font-size:11px;color:var(--muted);margin-top:10px;">💡 Se a barra de favoritos não aparecer no SPE, pressione <b>Ctrl+Shift+B</b> para exibi-la.</p>
         </div>
 
         <!-- Passo 3 -->
@@ -1931,42 +1932,9 @@ async function _geocode(end, cid) {
 
 // Gera o código do bookmarklet
 function _speGerarBookmarklet() {
-    var s = '(async function speBM(){';
-    s += 'var dl=function(ms){return new Promise(function(r){setTimeout(r,ms);});};';
-    s += 'var res=[];';
-    s += 'var sel="button[title=\'Visualizar detalhes da v\u00edtima\'],a[title=\'Visualizar detalhes da v\u00edtima\']";';
-    s += 'function lC(c,l){var els=c.querySelectorAll("*");for(var i=0;i<els.length;i++){var t=(els[i].innerText||"").trim();if(t.toLowerCase().startsWith(l.toLowerCase())){var v=t.slice(l.length).replace(/^[:\\s]+/,"").trim();if(v.length>2)return v;}}return "";}';
-    s += 'async function lM(){await dl(1200);var m=null;for(var i=0;i<20;i++){m=document.querySelector(".modal.show,.modal[style*=\'display: block\'],[role=\'dialog\']");if(m)break;await dl(200);}if(!m)return null;';
-    s += 'var nome=lC(m,"Nome"),cpf=lC(m,"CPF"),rg=lC(m,"RG"),tel=lC(m,"Telefone"),mpu=lC(m,"N\u00famero"),df=lC(m,"Data Fim"),autor=lC(m,"Autor");';
-    s += 'var endV="";var bs=m.querySelectorAll(".card,.card-body,.accordion-item,.accordion-body,.collapse.show");for(var i=0;i<bs.length;i++){if(!endV){var loc=lC(bs[i],"Local");if(loc)endV=loc;}}';
-    s += 'if(!endV){var els=m.querySelectorAll("p,span,div,li,td");for(var i=0;i<els.length;i++){if(endV)break;var t=(els[i].innerText||"").trim();if(/^local:/i.test(t))endV=t.replace(/^local:/i,"").trim().split("\\n")[0].trim();}}';
-    s += 'var vd="";if(df){var p=df.replace(/\\s.*/,"").split("/");if(p.length===3)vd=p[2]+"-"+p[1].padStart(2,"0")+"-"+p[0].padStart(2,"0");}';
-    s += 'if(!vd){var d=new Date();d.setFullYear(d.getFullYear()+1);vd=d.toISOString().split("T")[0];}';
-    s += 'return{nome:nome,cpf:cpf,rg:rg,tel:tel,mpu:mpu,vd:vd,autor:autor,endV:endV};}';
-    s += 'function fM(){var b=document.querySelector(".modal.show .btn-close,.modal.show button[data-bs-dismiss=\'modal\'],.modal.show .close");if(b)b.click();}';
-    s += 'var pan=document.createElement("div");pan.style="position:fixed;bottom:16px;right:16px;z-index:99999;background:#2D0B5A;color:#fff;padding:14px 18px;border-radius:14px;font-size:12px;font-family:sans-serif;min-width:260px;box-shadow:0 8px 32px rgba(0,0,0,.5);";document.body.appendChild(pan);';
-    s += 'function ui(t,p){pan.innerHTML="<b>\uD83D\uDE94 Importando...</b><div style=\'margin-top:5px;font-size:11px;opacity:.85\'>"+t+"</div><div style=\'background:rgba(255,255,255,.2);border-radius:6px;height:5px;margin-top:8px;overflow:hidden\'><div style=\'height:100%;background:#9058CC;width:"+p+"%;border-radius:6px\'></div></div>";}';
-    s += 'function notify(tipo,dados,atual,total){try{window.opener.postMessage({tipo:tipo,dados:dados,atual:atual,total:total},"*");}catch(e){}}';
-    s += 'var pag=1;';
-    s += 'while(true){';
-    s += 'var tot=document.querySelectorAll(sel).length;';
-    s += 'if(!tot){alert("Nenhuma v\u00edtima encontrada. Navegue at\u00e9 a tela de V\u00edtimas no SPE.");break;}';
-    s += 'notify("spe_inicio",null,0,tot);';
-    s += 'for(var i=0;i<tot;i++){';
-    s += 'var btn=document.querySelectorAll(sel)[i];if(!btn)continue;';
-    s += 'btn.click();var d=await lM();fM();await dl(750);';
-    s += 'if(d&&d.nome){res.push(d);ui(d.nome,Math.round((i+1)/tot*100));notify("spe_item",d,res.length,tot);}';
-    s += '}';
-    s += 'var bP=Array.from(document.querySelectorAll(".pagination .page-item a,.pagination a.page-link")).find(function(a){return /pr\u00f3ximo|next|\u203a|\u00bb/i.test(a.innerText);});';
-    s += 'var dis=bP&&(bP.closest("li")&&bP.closest("li").classList.contains("disabled")||bP.classList.contains("disabled"));';
-    s += 'if(!bP||dis)break;';
-    s += 'bP.click();await dl(2000);pag++;';
-    s += '}';
-    s += 'notify("spe_concluido",null,res.length,res.length);';
-    s += 'pan.innerHTML="<b>\u2705 "+res.length+" v\u00edtimas enviadas!</b><div style=\'font-size:11px;margin-top:4px;opacity:.8\'>Volte ao site da Patrulha para acompanhar.</div>";';
-    s += 'setTimeout(function(){pan.remove();},5000);';
-    s += '})();';
-    return 'javascript:' + s;
+    // Bookmarklet loader — carrega o script do GitHub e executa
+    var url = 'https://raw.githubusercontent.com/micwoy193-alt/pmp-projeto-2/main/spe_importar.js';
+    return "javascript:(function(){var s=document.createElement('script');s.src='" + url + "?v='+Date.now();document.head.appendChild(s);})();";
 }
 
 // Injeta o href do bookmarklet no link quando a aba SPE for aberta
