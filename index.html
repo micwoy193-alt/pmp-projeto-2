@@ -409,25 +409,27 @@
         <!-- BOOKMARKLET — destaque principal -->
         <div class="card" style="border:2px solid #6B35A8;background:linear-gradient(135deg,#f5f0ff,#fff);">
             <div class="card-title" style="color:#6B35A8;font-size:13px;">⭐ BOOKMARKLET — Adicione aos Favoritos</div>
-            <p style="font-size:13px;color:#444;margin-bottom:14px;">Arraste o botão abaixo para a <b>barra de favoritos</b> do navegador. Depois, dentro do SPE, é só clicar nele para importar tudo automaticamente.</p>
+            <p style="font-size:13px;color:#444;margin-bottom:14px;">Clique no botão abaixo para adicionar o importador direto na sua barra de favoritos.</p>
 
-            <!-- Botão para arrastar -->
-            <div style="background:#f0e8ff;border:2px dashed #9058CC;border-radius:14px;padding:18px;text-align:center;margin-bottom:12px;">
-                <div style="font-size:11px;color:#6B35A8;margin-bottom:10px;font-weight:600;">👇 ARRASTE ESTE BOTÃO PARA A BARRA DE FAVORITOS</div>
+            <!-- Botão criar favorito automaticamente -->
+            <button onclick="speAdicionarFavorito()" style="width:100%;padding:14px;background:linear-gradient(135deg,#2D0B5A,#6B35A8);color:white;border:none;border-radius:12px;font-size:15px;font-weight:bold;cursor:pointer;box-shadow:0 6px 20px rgba(107,53,168,0.4);margin-bottom:12px;">
+                ⭐ ADICIONAR À BARRA DE FAVORITOS
+            </button>
+
+            <!-- Fallback: arrastar -->
+            <div style="background:#f0e8ff;border:2px dashed #9058CC;border-radius:14px;padding:14px;text-align:center;margin-bottom:12px;">
+                <div style="font-size:11px;color:#6B35A8;margin-bottom:10px;font-weight:600;">OU ARRASTE ESTE BOTÃO PARA A BARRA DE FAVORITOS</div>
                 <a id="spe-bookmarklet" href="#"
-                   style="display:inline-flex;align-items:center;gap:10px;padding:14px 24px;background:linear-gradient(135deg,#2D0B5A,#6B35A8);color:white;border-radius:12px;font-size:15px;font-weight:bold;text-decoration:none;cursor:grab;box-shadow:0 6px 20px rgba(107,53,168,0.5);user-select:none;"
+                   style="display:inline-flex;align-items:center;gap:10px;padding:12px 22px;background:linear-gradient(135deg,#2D0B5A,#6B35A8);color:white;border-radius:12px;font-size:14px;font-weight:bold;text-decoration:none;cursor:grab;box-shadow:0 4px 14px rgba(107,53,168,0.4);"
                    ondragstart="this.style.opacity='0.7'" ondragend="this.style.opacity='1'">
                     🚔 Importar SPE → Patrulha
                 </a>
-                <div style="font-size:11px;color:#888;margin-top:10px;">↑ Segure e arraste até a barra de favoritos ↑</div>
             </div>
 
-            <!-- Animação ilustrativa -->
             <div style="background:#fff;border:1px solid #e0d6f7;border-radius:10px;padding:10px 14px;font-size:11px;color:#555;line-height:1.8;">
                 <b style="color:#6B35A8;">Como ativar a barra de favoritos:</b><br>
                 • <b>Edge / Chrome:</b> pressione <kbd style="background:#eee;padding:1px 5px;border-radius:4px;font-size:10px;">Ctrl+Shift+B</kbd><br>
-                • <b>Firefox:</b> pressione <kbd style="background:#eee;padding:1px 5px;border-radius:4px;font-size:10px;">Ctrl+Shift+B</kbd><br>
-                • <b>Celular:</b> favoritos ficam no menu ☰ do navegador
+                • <b>Firefox:</b> pressione <kbd style="background:#eee;padding:1px 5px;border-radius:4px;font-size:10px;">Ctrl+Shift+B</kbd>
             </div>
         </div>
 
@@ -1955,6 +1957,42 @@ async function saveEdit() {
 // ═══════════════════════════════════════════════
 
 let _spePopup = null;
+
+function speAdicionarFavorito() {
+    const url = "javascript:(function(){var s=document.createElement('script');s.src='https://raw.githubusercontent.com/micwoy193-alt/pmp-projeto-2/main/spe_importar.js?v='+Date.now();document.head.appendChild(s);})();";
+    const nome = '🚔 Importar SPE → Patrulha';
+
+    // Tenta API moderna de favoritos
+    if (window.sidebar && window.sidebar.addPanel) {
+        window.sidebar.addPanel(nome, url, '');
+        return;
+    }
+    if (window.external && ('AddFavorite' in window.external)) {
+        window.external.AddFavorite(url, nome);
+        return;
+    }
+
+    // Fallback: abre janela para o usuário salvar manualmente
+    const novo = window.open('', '_blank', 'width=600,height=400');
+    novo.document.write(`
+        <html><head><title>Adicionar Favorito</title></head>
+        <body style="font-family:sans-serif;padding:30px;background:#f5f0ff;">
+        <h2 style="color:#6B35A8;">🚔 Adicionar Importador SPE aos Favoritos</h2>
+        <p style="color:#555;margin:16px 0;">O Edge bloqueia a criação automática de favoritos por segurança.<br>Siga os passos abaixo:</p>
+        <ol style="color:#333;line-height:2.2;font-size:14px;">
+            <li>Pressione <b>Ctrl+Shift+B</b> para mostrar a barra de favoritos</li>
+            <li>Clique com o <b>botão direito</b> na barra de favoritos</li>
+            <li>Clique em <b>"Adicionar favorito"</b></li>
+            <li>No campo <b>Nome</b> coloque: <code style="background:#eee;padding:2px 6px;border-radius:4px;">🚔 Importar SPE → Patrulha</code></li>
+            <li>No campo <b>URL</b> cole o código abaixo:</li>
+        </ol>
+        <textarea onclick="this.select()" style="width:100%;height:80px;font-size:11px;font-family:monospace;padding:10px;border:2px solid #6B35A8;border-radius:8px;margin:10px 0;">${url}</textarea>
+        <button onclick="navigator.clipboard.writeText(document.querySelector('textarea').value).then(()=>alert('✅ Copiado! Agora cole no campo URL do favorito.'))" style="padding:12px 24px;background:#6B35A8;color:white;border:none;border-radius:8px;font-size:14px;font-weight:bold;cursor:pointer;width:100%;">
+            📋 COPIAR URL DO FAVORITO
+        </button>
+        </body></html>
+    `);
+}
 
 function speAbrirPopup() {
     _spePopup = window.open(
