@@ -845,6 +845,8 @@ function startApp() {
     setTimeout(() => { initMapMain(); initMapSelect(); }, 350);
     // Registra listener de mensagens do SPE uma única vez
     _speRegistrarListener();
+    // Limpeza automática de inativas há mais de 2 dias
+    setTimeout(() => limparInativas(), 3000);
 }
 
 // ═══════════════════════════════════════════════
@@ -1228,10 +1230,45 @@ function initMapSelect() {
 // ═══════════════════════════════════════════════
 function getVisibleVictims() {
     victims = loadVictims();
-    if (curUser.role === 'master') return victims;
+    // Exclui vítimas inativas (não aparecem no mapa nem na lista)
+    const ativas = victims.filter(v => v.status !== 'inativo');
+    if (curUser.role === 'master') return ativas;
     const userCities = curUser.cities || [curUser.city];
-    return victims.filter(v => userCities.includes(v.city));
+    return ativas.filter(v => userCities.includes(v.city));
 }
+
+// Limpeza automática: exclui do Firebase vítimas inativas há mais de 2 dias
+async function limparInativas() {
+    if (!fbConnected) return;
+    try {
+        const snap = await db.collection('victims').get();
+        const agora = new Date();
+        const dois_dias_ms = 2 * 24 * 60 * 60 * 1000;
+        let excluidas = 0;
+        for (const doc of snap.docs) {
+            const d = doc.data();
+            if (d.status !== 'inativo') continue;
+            const inativadoEm = d.inativadoEm ? new Date(d.inativadoEm) : null;
+            if (!inativadoEm) continue;
+            if ((agora - inativadoEm) >= dois_dias_ms) {
+                await db.collection('victims').doc(doc.id).delete();
+                excluidas++;
+                console.log('[PMP] Excluída automaticamente:', d.v_nome);
+            }
+        }
+        if (excluidas > 0) {
+            console.log(`[PMP] ${excluidas} vítimas inativas excluídas automaticamente.`);
+            // Atualiza lista local
+            victims = victims.filter(v => v.status !== 'inativo' || !v.inativadoEm || (agora - new Date(v.inativadoEm)) < dois_dias_ms);
+            saveVictims(victims);
+            renderVictims();
+            renderMarkersOnMap();
+        }
+    } catch(e) {
+        console.warn('[PMP] Erro na limpeza de inativas:', e.message);
+    }
+}
+
 
 // ═══════════════════════════════════════════════
 //  LISTA DE VÍTIMAS
@@ -1241,7 +1278,11 @@ function renderVictims() {
     const q = (document.getElementById('v-search')?.value || '').toLowerCase();
     const today = new Date().toISOString().split('T')[0];
     const isAdmin = curUser.role === 'master' || curUser.role === 'manager';
-    let list = getVisibleVictims();
+    // Master vê inativas também (com badge), outros não veem
+    victims = loadVictims();
+    let list = curUser.role === 'master'
+        ? victims
+        : getVisibleVictims();
     if (q) list = list.filter(v => v.v_nome.toLowerCase().includes(q) || v.rua.toLowerCase().includes(q) || v.a_nome.toLowerCase().includes(q));
 
     if (!list.length) { container.innerHTML = '<div class="alert alert-info">ℹ️ Nenhuma medida protetiva encontrada para sua cidade.</div>'; return; }
@@ -1260,6 +1301,7 @@ function renderVictims() {
             ${expired
                 ? `<span class="badge-p badge-exp">⚠️ MPU vencida em ${validFmt}</span>`
                 : `<span class="badge-p badge-v">✅ MPU: ${validFmt} (${daysLeft}d)</span>`}
+            ${v.status === 'inativo' ? `<span class="badge-p" style="background:#FFF3E0;color:#E65100;border:1px solid #FFB300;">⏳ INATIVA — será excluída em breve</span>` : ''}
             <div style="display:flex;gap:8px;margin-top:10px;clear:both;">
                 <a href="https://www.google.com/maps/dir/?api=1&destination=${v.lat},${v.lng}" target="_blank" class="btn-gps" style="flex:1;margin:0;">🗺️ ROTA GPS</a>
                 ${isAdmin ? `<button class="btn btn-secondary btn-sm" onclick="editV(${v.id})" style="margin:0;">✏️</button>` : ''}
