@@ -1,7 +1,9 @@
 // ============================================================
-// COLE ESTE SCRIPT NO CONSOLE DO SPE (F12 → Console → Enter)
+// COLE NO CONSOLE DO SPE (F12 → Console → Enter)
 // Salva direto no Firebase da Patrulha Maria da Penha
 // ✅ Preserva localização ajustada manualmente
+// ✅ Marca como inativo quem não está mais no SPE
+// ✅ Inativas há +2 dias são excluídas automaticamente pelo site
 // ============================================================
 (async function() {
     const delay = ms => new Promise(r => setTimeout(r, ms));
@@ -83,15 +85,24 @@
     if(!pan){pan=document.createElement('div');pan.id='_pmp_pan';pan.style='position:fixed;bottom:16px;right:16px;z-index:99999;background:#2D0B5A;color:#fff;padding:14px 18px;border-radius:14px;font-size:12px;font-family:sans-serif;min-width:300px;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,.5);';document.body.appendChild(pan);}
     function ui(t,s,p){pan.innerHTML='<b>🚔 '+t+'</b>'+(s?'<div style="margin-top:5px;font-size:11px;opacity:.85;word-break:break-word">'+s+'</div>':'')+'<div style="background:rgba(255,255,255,.2);border-radius:6px;height:6px;margin-top:8px;overflow:hidden"><div style="height:100%;background:#9058CC;width:'+(p||0)+'%;transition:width .3s;border-radius:6px"></div></div>';}
 
+    // Carrega base existente
     ui('Carregando base...','Verificando cadastros existentes',0);
-    const snap=await db.collection('victims').get();
-    const base=new Map();
-    snap.docs.forEach(doc=>{const d=doc.data();const cpfL=(d.cpf||'').replace(/\D/g,'');if(cpfL)base.set(cpfL,{docId:doc.id,data:d});});
+    const snap = await db.collection('victims').get();
+    const base = new Map(); // cpf → {docId, data}
+    snap.docs.forEach(doc=>{
+        const d=doc.data();
+        const cpfL=(d.cpf||'').replace(/\D/g,'');
+        if(cpfL) base.set(cpfL,{docId:doc.id,data:d});
+    });
+    console.log('[PMP] Base:', base.size, 'registros');
 
-    const importados=[],atualizados=[],ignorados=[],erros=[];
+    // Coleta todos os CPFs que vieram do SPE nesta extração
+    const cpfsSPE = new Set();
+    const importados=[], atualizados=[], ignorados=[], inativados=[], erros=[];
     const sel='button[title="Visualizar detalhes da vítima"],a[title="Visualizar detalhes da vítima"]';
     let pagina=1;
 
+    // ── FASE 1: extrai e salva vítimas do SPE ──
     while(true){
         const total=document.querySelectorAll(sel).length;
         if(!total){ui('⚠️ Sem vítimas','Navegue até Vítimas no SPE',0);break;}
@@ -101,23 +112,46 @@
             if(!d||!d.nome){erros.push('linha '+(i+1));continue;}
             const cpfL=(d.cpf||'').replace(/\D/g,'');
             const pct=Math.round((i+1)/total*100);
-            ui('Importando...',d.nome+(d.endV?'\n📍 '+d.endV:''),pct);
+            ui('Extraindo SPE...',d.nome+(d.endV?'\n📍 '+d.endV:''),pct);
+            if(cpfL) cpfsSPE.add(cpfL);
+
             const existente=cpfL?base.get(cpfL):null;
             if(existente){
                 const ex=existente.data;
                 const locAjustada=ex.geo_impreciso===false&&ex.updatedBy&&ex.updatedBy!=='importador_spe';
                 if(locAjustada){
                     try{
-                        await db.collection('victims').doc(existente.docId).update({v_nome:d.nome,rua:d.endV||ex.rua,valid:d.vd,cpf:d.cpf||ex.cpf,rg:d.rg||ex.rg,telefone:d.tel||ex.telefone,numMpu:d.mpu||ex.numMpu,a_nome:d.autor||ex.a_nome,updatedAt:new Date().toISOString(),updatedBy:'importador_spe',_secret:SECRET});
+                        await db.collection('victims').doc(existente.docId).update({
+                            v_nome:d.nome,rua:d.endV||ex.rua,valid:d.vd,
+                            cpf:d.cpf||ex.cpf,rg:d.rg||ex.rg,
+                            telefone:d.tel||ex.telefone,numMpu:d.mpu||ex.numMpu,
+                            a_nome:d.autor||ex.a_nome,
+                            status:'ativo', inativadoEm: null,
+                            updatedAt:new Date().toISOString(),
+                            updatedBy:'importador_spe',_secret:SECRET
+                        });
                         atualizados.push(d.nome);
                     }catch(e){erros.push(d.nome);}
-                }else{ignorados.push(d.nome);}
+                } else {
+                    // Reativa se estava inativa
+                    if(ex.status==='inativo'){
+                        try{
+                            await db.collection('victims').doc(existente.docId).update({
+                                status:'ativo', inativadoEm:null,
+                                updatedAt:new Date().toISOString(),_secret:SECRET
+                            });
+                        }catch(e){}
+                    }
+                    ignorados.push(d.nome);
+                }
                 continue;
             }
+
+            // Nova vítima
             const cidade=detCidade(d.endV);
             const coords=d.endV?await geocode(d.endV,cidade):{lat:GEO[cidade]?.lat||-28.2865,lng:GEO[cidade]?.lng||-54.2644,ok:false};
             await delay(600);
-            const v={id:Date.now()+Math.random(),city:cidade,v_nome:d.nome,rua:d.endV||'Endereço não informado',a_nome:d.autor||'Não identificado',a_rg:d.cpf||d.rg||'',a_rua:'',valid:d.vd,dist:300,foto:'https://cdn-icons-png.flaticon.com/512/3135/3135715.png',lat:coords.lat,lng:coords.lng,geo_impreciso:!coords.ok,cpf:d.cpf||'',rg:d.rg||'',telefone:d.tel||'',numMpu:d.mpu||'',obs:'Importado SPE '+new Date().toLocaleDateString('pt-BR'),createdBy:'importador_spe',createdAt:new Date().toISOString(),_secret:SECRET};
+            const v={id:Date.now()+Math.random(),city:cidade,v_nome:d.nome,rua:d.endV||'Endereço não informado',a_nome:d.autor||'Não identificado',a_rg:d.cpf||d.rg||'',a_rua:'',valid:d.vd,dist:1,foto:'https://cdn-icons-png.flaticon.com/512/3135/3135715.png',lat:coords.lat,lng:coords.lng,geo_impreciso:!coords.ok,cpf:d.cpf||'',rg:d.rg||'',telefone:d.tel||'',numMpu:d.mpu||'',status:'ativo',obs:'Importado SPE '+new Date().toLocaleDateString('pt-BR'),createdBy:'importador_spe',createdAt:new Date().toISOString(),_secret:SECRET};
             try{await db.collection('victims').doc(String(v.id)).set(v);base.set(cpfL,{docId:String(v.id),data:v});importados.push(d.nome);}catch(e){erros.push(d.nome);}
         }
         const bP=Array.from(document.querySelectorAll('.pagination .page-item a,.pagination a.page-link')).find(a=>/próximo|next|›|»/i.test(a.innerText));
@@ -125,8 +159,26 @@
         bP.click();await delay(2000);pagina++;
     }
 
-    const msg='✅ '+importados.length+' novas\n🔄 '+atualizados.length+' atualizadas\n⏭ '+ignorados.length+' sem alteração\n❌ '+erros.length+' erros';
+    // ── FASE 2: marca como inativo quem não veio do SPE ──
+    ui('Verificando ausentes...','Marcando inativas...',95);
+    for(const [cpfL, {docId, data}] of base.entries()){
+        if(cpfsSPE.has(cpfL)) continue;           // está no SPE — ok
+        if(data.status === 'inativo') continue;    // já estava inativa
+        if(data.createdBy !== 'importador_spe') continue; // cadastro manual — não inativa
+        try{
+            await db.collection('victims').doc(docId).update({
+                status:'inativo',
+                inativadoEm: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                _secret: SECRET
+            });
+            inativados.push(data.v_nome||docId);
+            console.log('[PMP] Inativada:', data.v_nome);
+        }catch(e){erros.push(data.v_nome||docId);}
+    }
+
+    const msg='✅ '+importados.length+' novas\n🔄 '+atualizados.length+' atualizadas\n⏭ '+ignorados.length+' sem alteração\n⏳ '+inativados.length+' inativadas (excluídas em 2 dias)\n❌ '+erros.length+' erros';
     pan.innerHTML='<b>✅ Concluído!</b><div style="margin-top:6px;font-size:11px;line-height:1.8;opacity:.9">'+msg.replace(/\n/g,'<br>')+'</div>';
-    setTimeout(()=>pan.remove(),8000);
+    setTimeout(()=>pan.remove(),10000);
     alert('✅ Importação concluída!\n\n'+msg+'\n\nAtualize o site da Patrulha para ver as alterações.');
 })();
