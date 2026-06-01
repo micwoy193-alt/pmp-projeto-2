@@ -160,6 +160,16 @@
     }
 
     // ── FASE 2: marca como inativo quem não veio do SPE ──
+    // SEGURANÇA: só inativa se extraiu pelo menos 1 vítima do SPE
+    if (cpfsSPE.size === 0) {
+        console.warn('[PMP] Nenhuma vítima extraída — fase de inativação ignorada.');
+        const msg2 = '⚠️ Nenhuma vítima encontrada no SPE.\nCertifique-se de estar na tela de Vítimas antes de clicar no favorito.';
+        pan.innerHTML = '<b>⚠️ Atenção!</b><div style="margin-top:6px;font-size:11px;line-height:1.6;opacity:.9;">' + msg2.replace(/\n/g,'<br>') + '</div>';
+        setTimeout(()=>pan.remove(),8000);
+        alert(msg2);
+        return;
+    }
+
     ui('Verificando ausentes...','Marcando inativas...',95);
     for(const [cpfL, {docId, data}] of base.entries()){
         if(cpfsSPE.has(cpfL)) continue;           // está no SPE — ok
