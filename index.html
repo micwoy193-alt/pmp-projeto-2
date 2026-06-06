@@ -48,7 +48,7 @@
         /* ── HEADER ── */
         .header {
             background: linear-gradient(90deg, #2D0B5A, #6B35A8, #4A6FD4);
-            color: white; padding: 14px 15px; display: flex; justify-content: space-between; align-items: center;
+            color: white; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; gap: 8px;
             position: sticky; top: 0; z-index: 2000;
         }
         .header-info b { font-size: 13px; }
@@ -283,6 +283,11 @@
             <small id="h-id">ID: 0000000</small>
             <small id="h-cidade" style="opacity:0.7;"></small>
             <span id="h-role-badge" class="role-badge">-</span>
+        </div>
+        <!-- Contador de MPUs ativas -->
+        <div id="h-mpu-counter" style="display:flex;flex-direction:column;align-items:center;gap:2px;background:rgba(255,255,255,0.12);border-radius:10px;padding:6px 12px;cursor:pointer;" onclick="switchTab('lista',document.getElementById('tab-lista'))" title="Ver medidas protetivas">
+            <span id="h-mpu-num" style="font-size:22px;font-weight:900;color:white;line-height:1;">0</span>
+            <span style="font-size:9px;color:rgba(255,255,255,0.75);text-transform:uppercase;letter-spacing:0.05em;text-align:center;line-height:1.2;">MPUs<br>ativas</span>
         </div>
         <button class="btn-exit" onclick="doLogout()">SAIR ⏻</button>
     </div>
@@ -854,6 +859,7 @@ function startApp() {
 
     renderVictims();
     setTimeout(() => { initMapMain(); initMapSelect(); }, 350);
+    setTimeout(() => atualizarContadorMPU(), 600);
     // Registra listener de mensagens do SPE uma única vez
     _speRegistrarListener();
     // Limpeza automática de inativas há mais de 2 dias
@@ -1367,6 +1373,7 @@ async function limparInativas() {
 //  LISTA DE VÍTIMAS
 // ═══════════════════════════════════════════════
 function renderVictims() {
+    atualizarContadorMPU();
     const container = document.getElementById('victims-list');
     const q = (document.getElementById('v-search')?.value || '').toLowerCase();
     const today = new Date().toISOString().split('T')[0];
@@ -1807,7 +1814,21 @@ function populateEditCidades() {
     });
 }
 
-function editV(id) { editAgressor(id); }
+function atualizarContadorMPU() {
+    const el = document.getElementById('h-mpu-num');
+    if (!el || !curUser) return;
+    const hoje = new Date().toISOString().split('T')[0];
+    const visíveis = getVisibleVictims().filter(v => v.status !== 'inativo' && v.valid >= hoje);
+    el.textContent = visíveis.length;
+    // Cor: vermelho se houver vencendo hoje ou amanhã
+    const urgente = visíveis.some(v => {
+        const dias = Math.ceil((new Date(v.valid) - new Date(hoje)) / 86400000);
+        return dias <= 7;
+    });
+    el.style.color = urgente ? '#FFD600' : 'white';
+}
+
+
 
 // Mapa de edição
 let mapEdit = null, markerEdit = null;
