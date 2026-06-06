@@ -66,7 +66,10 @@
         let m=null;
         for(let i=0;i<20;i++){m=document.querySelector('.modal.show,.modal[style*="display: block"],[role="dialog"]');if(m)break;await delay(200);}
         if(!m)return null;
-        const nome=lerCampo(m,'Nome'),cpf=lerCampo(m,'CPF'),rg=lerCampo(m,'RG'),tel=lerCampo(m,'Telefone'),mpu=lerCampo(m,'Número'),df=lerCampo(m,'Data Fim'),autor=lerCampo(m,'Autor');
+        const nomeRaw=lerCampo(m,'Nome');
+        // Limpa nome: remove CPF, RG, Nascimento, Telefone concatenados
+        function limparNome(n){return(n||'').replace(/\s*CPF[:\s]+[\d.\-\/]+/gi,'').replace(/\s*RG[:\s]+[\d.\-\/]+/gi,'').replace(/\s*Nascimento[:\s]+[\d\/\(\)anos\s]+/gi,'').replace(/\s*Telefone[:\s]+[\d\s\(\)\-+]+/gi,'').replace(/\d{3}\.\d{3}\.\d{3}-\d{2}/g,'').replace(/\d{2}\/\d{2}\/\d{4}/g,'').replace(/\s{2,}/g,' ').replace(/[\s:\-–,;.]+$/,'').trim();}
+        const nome=limparNome(nomeRaw),cpf=lerCampo(m,'CPF'),rg=lerCampo(m,'RG'),tel=lerCampo(m,'Telefone'),mpu=lerCampo(m,'Número'),df=lerCampo(m,'Data Fim'),autor=lerCampo(m,'Autor');
         let endV='';
         m.querySelectorAll('.card,.card-body,.accordion-item,.accordion-body,.collapse.show').forEach(b=>{if(!endV){const loc=lerCampo(b,'Local');if(loc)endV=loc;}});
         if(!endV) m.querySelectorAll('p,span,div,li,td').forEach(el=>{if(endV)return;const t=(el.innerText||'').trim();if(/^local:/i.test(t))endV=t.replace(/^local:/i,'').trim().split('\n')[0].trim();});
