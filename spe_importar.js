@@ -91,11 +91,14 @@
     // Carrega base existente
     ui('Carregando base...','Verificando cadastros existentes',0);
     const snap = await db.collection('victims').get();
-    const base = new Map(); // cpf → {docId, data}
+    const base = new Map(); // chave (cpf|rg|nome) → {docId, data}
     snap.docs.forEach(doc=>{
         const d=doc.data();
         const cpfL=(d.cpf||'').replace(/\D/g,'');
-        if(cpfL) base.set(cpfL,{docId:doc.id,data:d});
+        const rgL=(d.rg||'').replace(/\D/g,'');
+        const nomeN=(d.v_nome||'').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+        const chave=cpfL||rgL||nomeN;
+        if(chave) base.set(chave,{docId:doc.id,data:d});
     });
     console.log('[PMP] Base:', base.size, 'registros');
 
@@ -114,11 +117,14 @@
             btn.click();const d=await lerModal();fecharModal();await delay(750);
             if(!d||!d.nome){erros.push('linha '+(i+1));continue;}
             const cpfL=(d.cpf||'').replace(/\D/g,'');
+            const rgL=(d.rg||'').replace(/\D/g,'');
+            const nomeN=(d.nome||'').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+            const chave=cpfL||rgL||nomeN;
             const pct=Math.round((i+1)/total*100);
             ui('Extraindo SPE...',d.nome+(d.endV?'\n📍 '+d.endV:''),pct);
-            if(cpfL) cpfsSPE.add(cpfL);
+            if(chave) cpfsSPE.add(chave);
 
-            const existente=cpfL?base.get(cpfL):null;
+            const existente=chave?base.get(chave):null;
             if(existente){
                 const ex=existente.data;
                 const locAjustada=ex.geo_impreciso===false&&ex.updatedBy&&ex.updatedBy!=='importador_spe';
@@ -155,7 +161,7 @@
             const coords=d.endV?await geocode(d.endV,cidade):{lat:GEO[cidade]?.lat||-28.2865,lng:GEO[cidade]?.lng||-54.2644,ok:false};
             await delay(600);
             const v={id:Date.now()+Math.random(),city:cidade,v_nome:d.nome,rua:d.endV||'Endereço não informado',a_nome:d.autor||'Não identificado',a_rg:d.cpf||d.rg||'',a_rua:'',valid:d.vd,dist:1,foto:'https://cdn-icons-png.flaticon.com/512/3135/3135715.png',lat:coords.lat,lng:coords.lng,geo_impreciso:!coords.ok,cpf:d.cpf||'',rg:d.rg||'',telefone:d.tel||'',numMpu:d.mpu||'',status:'ativo',obs:'Importado SPE '+new Date().toLocaleDateString('pt-BR'),createdBy:'importador_spe',createdAt:new Date().toISOString(),_secret:SECRET};
-            try{await db.collection('victims').doc(String(v.id)).set(v);base.set(cpfL,{docId:String(v.id),data:v});importados.push(d.nome);}catch(e){erros.push(d.nome);}
+            try{await db.collection('victims').doc(String(v.id)).set(v);base.set(chave,{docId:String(v.id),data:v});importados.push(d.nome);}catch(e){erros.push(d.nome);}
         }
         const bP=Array.from(document.querySelectorAll('.pagination .page-item a,.pagination a.page-link')).find(a=>/próximo|next|›|»/i.test(a.innerText));
         if(!bP||bP?.closest('li')?.classList.contains('disabled')||bP?.classList.contains('disabled'))break;
