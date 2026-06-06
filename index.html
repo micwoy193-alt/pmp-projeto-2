@@ -858,6 +858,8 @@ function startApp() {
     _speRegistrarListener();
     // Limpeza automática de inativas há mais de 2 dias
     setTimeout(() => limparInativas(), 3000);
+    // Limpeza automática de nomes com dados concatenados
+    setTimeout(() => limparNomesConcatenados(), 5000);
 }
 
 // ═══════════════════════════════════════════════
@@ -1263,7 +1265,48 @@ function getVisibleVictims() {
     return ativas.filter(v => userCities.includes(v.city));
 }
 
-// Limpeza automática: exclui do Firebase vítimas inativas há mais de 2 dias
+// Limpeza automática de nomes com CPF/RG/Nascimento/Telefone concatenados
+async function limparNomesConcatenados() {
+    if (!fbConnected) return;
+    function limpar(n) {
+        return (n||'')
+            .replace(/\s*CPF[:\s]+[\d.\-\/]+/gi,'')
+            .replace(/\s*RG[:\s]+[\d.\-\/]+/gi,'')
+            .replace(/\s*Nascimento[:\s]+[\d\/\(\)anos\s]+/gi,'')
+            .replace(/\s*Telefone[:\s]+[\d\s\(\)\-+]+/gi,'')
+            .replace(/\d{3}\.\d{3}\.\d{3}-\d{2}/g,'')
+            .replace(/\d{2}\/\d{2}\/\d{4}/g,'')
+            .replace(/\s{2,}/g,' ')
+            .replace(/[\s:\-–,;.]+$/,'')
+            .trim();
+    }
+    try {
+        const snap = await db.collection('victims').get();
+        let corrigidos = 0;
+        for (const doc of snap.docs) {
+            const d = doc.data();
+            const nome = d.v_nome || '';
+            if (!/CPF|RG:|Nasc|Telefone|\d{3}\.\d{3}|\d{11}/i.test(nome)) continue;
+            const limpo = limpar(nome);
+            if (limpo && limpo !== nome && limpo.length > 2) {
+                await doc.ref.update({ v_nome: limpo, _secret: APP_SECRET, updatedAt: new Date().toISOString() });
+                corrigidos++;
+            }
+        }
+        if (corrigidos > 0) {
+            console.log(`[PMP] ${corrigidos} nomes corrigidos automaticamente.`);
+            const snap2 = await db.collection('victims').get();
+            victims = snap2.docs.map(d => d.data());
+            saveVictims(victims);
+            renderVictims();
+            renderMarkersOnMap();
+        }
+    } catch(e) {
+        console.warn('[PMP] Erro na limpeza de nomes:', e.message);
+    }
+}
+
+
 async function limparInativas() {
     if (!fbConnected) return;
     try {
