@@ -816,7 +816,9 @@ function startApp() {
     const badge = document.getElementById('h-role-badge');
     if (curUser.role === 'master') { badge.textContent = '⭐ MASTER'; badge.className = 'role-badge role-master'; }
     else if (curUser.role === 'manager') { badge.textContent = '🛡 GESTOR'; badge.className = 'role-badge role-manager'; }
+    else if (curUser.role === 'polost') { badge.textContent = '🗺 POLOST'; badge.className = 'role-badge'; badge.style.cssText = 'background:rgba(0,150,200,0.15);color:#0096C7;font-weight:bold;'; }
     else { badge.textContent = '👮 PATRULHEIRO'; badge.className = 'role-badge role-patrol'; }
+
     // Indicador de conexão Firebase
     const fbBadge = document.createElement('span');
     fbBadge.className = 'role-badge';
@@ -827,7 +829,6 @@ function startApp() {
     badge.insertAdjacentElement('afterend', fbBadge);
 
     // Mostrar abas por perfil
-    // Aba Agressores é visível para TODOS (já está no HTML sem display:none)
     if (curUser.role === 'master' || curUser.role === 'manager') {
         document.getElementById('tab-admin').style.display = '';
         document.getElementById('tab-spe').style.display = '';
@@ -835,6 +836,14 @@ function startApp() {
     }
     if (curUser.role === 'master') {
         document.getElementById('tab-audit').style.display = '';
+    }
+    // Polost: só vê o mapa — esconde todas as outras abas
+    if (curUser.role === 'polost') {
+        ['tab-lista','tab-agressores','tab-admin','tab-spe','tab-users','tab-audit'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+        });
+        switchTab('mapa', document.getElementById('tab-mapa'));
     }
 
     populateCitySelects();
@@ -913,6 +922,7 @@ function renderPending() {
                 <select id="role-sel-${u.id}" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);font-size:11px;">
                     <option value="patrol">👮 Patrulheiro</option>
                     ${curUser.role === 'master' ? '<option value="manager">🛡 Gestor</option>' : ''}
+                    <option value="polost">🗺 Polost</option>
                 </select>
                 <button class="btn btn-success btn-sm" onclick="approveUser('${u.id}', true)">✔ Aprovar</button>
                 <button class="btn btn-danger btn-sm" onclick="approveUser('${u.id}', false)">✘ Recusar</button>
@@ -965,7 +975,7 @@ function renderUsers() {
                 <b>${u.rank} ${u.name || ''}</b> &nbsp;|&nbsp; ID: <code>${u.id}</code><br>
                 📍 ${(u.cities || [u.city]).join(', ')} &nbsp;|&nbsp;
                 <span style="color:${u.role === 'manager' ? 'var(--manager)' : 'var(--patrol)'}">
-                    ${u.role === 'manager' ? '🛡 Gestor' : '👮 Patrulheiro'}
+                    ${u.role === 'manager' ? '🛡 Gestor' : u.role === 'polost' ? '🗺 Polost' : '👮 Patrulheiro'}
                 </span> &nbsp;|&nbsp;
                 <span style="color:var(--success);">✔ Ativo</span>
             </div>
@@ -973,6 +983,7 @@ function renderUsers() {
                 ${curUser.role === 'master' ? `
                 <select onchange="changeRole('${u.id}', this.value)" style="padding:7px;border-radius:8px;border:1px solid var(--border);font-size:11px;">
                     <option value="patrol" ${u.role==='patrol'?'selected':''}>👮 Patrulheiro</option>
+                    <option value="polost" ${u.role==='polost'?'selected':''}>🗺 Polost</option>
                     <option value="manager" ${u.role==='manager'?'selected':''}>🛡 Gestor</option>
                 </select>` : ''}
                 ${curUser.role === 'master' || (curUser.role === 'manager' && u.role === 'patrol' && (u.cities || [u.city]).includes(curUser.city)) ? `
@@ -1197,8 +1208,18 @@ function renderMarkersOnMap() {
             ? `<span class="badge-p" style="background:#FFF8E1;color:#F57F17;border:1px solid #FFD54F;">📍 Localização aproximada</span><br>`
             : '';
 
-        marker.bindPopup(`
-            <div class="popup-box">
+        // Popup: polost vê apenas distância e rota, sem dados da vítima
+        const popupContent = curUser.role === 'polost'
+            ? `<div class="popup-box">
+                <div style="text-align:center;padding:8px 0;">
+                    <span style="font-size:28px;">🚨</span><br>
+                    <b style="color:var(--brand);">Medida Protetiva</b><br>
+                    <span class="badge-p badge-d">🚫 DISTÂNCIA: ${v.dist}m</span><br>
+                    ${expTag}
+                    <a href="https://www.google.com/maps/dir/?api=1&destination=${v.lat},${v.lng}" target="_blank" class="btn-gps">🗺️ TRAÇAR ROTA</a>
+                </div>
+               </div>`
+            : `<div class="popup-box">
                 <img src="${v.foto}" class="pop-img" onerror="this.src='https://cdn-icons-png.flaticon.com/512/3135/3135715.png'">
                 <b style="color:var(--brand);font-size:14px;">${v.v_nome}</b><br>
                 <small>📍 ${v.rua}</small>
@@ -1209,7 +1230,9 @@ function renderMarkersOnMap() {
                 ${geoTag}
                 ${expTag}
                 <a href="https://www.google.com/maps/dir/?api=1&destination=${v.lat},${v.lng}" target="_blank" class="btn-gps">🗺️ TRAÇAR ROTA</a>
-            </div>`);
+               </div>`;
+
+        marker.bindPopup(popupContent);
     });
 }
 
