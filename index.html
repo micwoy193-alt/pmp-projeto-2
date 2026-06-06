@@ -1056,14 +1056,43 @@ function initMapMain() {
     }
 
     if (navigator.geolocation) {
+        // Publica presença imediatamente ao logar (sem coordenadas ainda)
+        if (fbConnected && curUser) {
+            db.collection('online_users').doc(String(curUser.id)).set({
+                _secret: APP_SECRET,
+                id: curUser.id,
+                name: curUser.name || curUser.id,
+                rank: curUser.rank || '',
+                role: curUser.role,
+                city: curUser.city || '',
+                lat: null, lng: null,
+                accuracy: null,
+                ts: Date.now(),
+                tsStr: new Date().toLocaleTimeString('pt-BR'),
+                online: true
+            }).catch(() => {});
+        }
+
         gpsWatchId = navigator.geolocation.watchPosition(
             pos => updateUserPosition(pos),
             err => {
                 document.getElementById('gps-status-float').innerHTML =
                     `⚠️ GPS indisponível: ${err.message}`;
             },
-            { enableHighAccuracy: true, maximumAge: 3000, timeout: 20000 }
+            { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
         );
+
+        // Atualiza presença a cada 30s mesmo sem novo fix GPS
+        setInterval(() => {
+            if (fbConnected && curUser && userMarker) {
+                const pos = userMarker.getLatLng();
+                db.collection('online_users').doc(String(curUser.id)).update({
+                    ts: Date.now(),
+                    tsStr: new Date().toLocaleTimeString('pt-BR'),
+                    _secret: APP_SECRET
+                }).catch(() => {});
+            }
+        }, 30000);
     } else {
         document.getElementById('gps-status-float').innerHTML = '⚠️ Geolocalização não suportada neste dispositivo.';
     }
@@ -1115,56 +1144,51 @@ function updateUserPosition(pos) {
     }
 }
 
-// Renderiza todos os outros patrulheiros online na camada 3
 function renderOnlineUsers(usersOnline) {
     if (!mapM || !layerUsers) return;
     layerUsers.clearLayers();
 
     const agora = Date.now();
-    const LIMITE_MS = 10 * 60 * 1000; // 10 minutos sem atualizar = offline
+    const LIMITE_MS = 10 * 60 * 1000; // 10 minutos = offline
     let countOnline = 0;
 
     usersOnline.forEach(u => {
         if (!curUser) return;
-        if (u.id == curUser.id) return; // não renderiza o próprio usuário aqui
-        if (!u.lat || !u.lng) return;
-        if (agora - u.ts > LIMITE_MS) return; // muito antigo, ignora
+        if (u.id == curUser.id) return;
+        if (agora - u.ts > LIMITE_MS) return;
 
         countOnline++;
 
-        // Cor por perfil
-        const roleClass = u.role === 'master' ? 'patrol-master' : u.role === 'manager' ? 'patrol-manager' : 'patrol-patrol';
-        const initial = (u.name || u.rank || '?')[0].toUpperCase();
-
-        const icon = L.divIcon({
-            className: `patrol-marker ${roleClass}`,
-            iconSize: [26, 26],
-            html: `<span style="font-size:11px;font-weight:bold;">${initial}</span>`
-        });
-
-        const marker = L.marker([u.lat, u.lng], { icon, zIndexOffset: 2500 }).addTo(layerUsers);
-
-        const minutosAtras = Math.floor((agora - u.ts) / 60000);
-        const tempoStr = minutosAtras === 0 ? 'agora' : `há ${minutosAtras} min`;
-        const roleLabel = u.role === 'master' ? '⭐ Master' : u.role === 'manager' ? '🛡 Gestor' : '👮 Patrulheiro';
-
-        marker.bindPopup(`
-            <div style="font-family:'Segoe UI',sans-serif;min-width:160px;">
-                <b style="font-size:13px;">${u.rank} ${u.name}</b><br>
-                <span style="font-size:10px;color:#666;">${roleLabel}</span><br>
-                <span style="font-size:10px;color:#666;">📍 ${u.city || ''}</span><br>
-                <span style="font-size:10px;color:#1B5E20;">🕐 Atualizado ${tempoStr}</span><br>
-                <span style="font-size:10px;color:#999;">Precisão: ±${u.accuracy || '?'}m</span>
-            </div>
-        `);
+        // Se tem GPS — mostra no mapa
+        if (u.lat && u.lng) {
+            const roleClass = u.role === 'master' ? 'patrol-master' : u.role === 'manager' ? 'patrol-manager' : u.role === 'polost' ? 'patrol-patrol' : 'patrol-patrol';
+            const initial = (u.name || u.rank || '?')[0].toUpperCase();
+            const icon = L.divIcon({
+                className: `patrol-marker ${roleClass}`,
+                iconSize: [26, 26],
+                html: `<span style="font-size:11px;font-weight:bold;">${initial}</span>`
+            });
+            const marker = L.marker([u.lat, u.lng], { icon, zIndexOffset: 2500 }).addTo(layerUsers);
+            const minutosAtras = Math.floor((agora - u.ts) / 60000);
+            const tempoStr = minutosAtras === 0 ? 'agora' : `há ${minutosAtras} min`;
+            const roleLabel = u.role === 'master' ? '⭐ Master' : u.role === 'manager' ? '🛡 Gestor' : u.role === 'polost' ? '🗺 Polost' : '👮 Patrulheiro';
+            marker.bindPopup(`
+                <div style="font-family:'Segoe UI',sans-serif;min-width:160px;">
+                    <b style="font-size:13px;">${u.rank} ${u.name}</b><br>
+                    <span style="font-size:10px;color:#666;">${roleLabel}</span><br>
+                    <span style="font-size:10px;color:#666;">📍 ${u.city || ''}</span><br>
+                    <span style="font-size:10px;color:#1B5E20;">🕐 Atualizado ${tempoStr}</span><br>
+                    <span style="font-size:10px;color:#999;">Precisão: ±${u.accuracy || '?'}m</span>
+                </div>`);
+        }
     });
 
-    // Atualiza contador online
+    // Contador inclui todos os logados (com ou sem GPS)
     const countEl = document.getElementById('online-count');
     if (countEl) {
         if (countOnline > 0) {
             countEl.style.display = 'block';
-            countEl.innerHTML = `🟢 ${countOnline} patrulheiro${countOnline > 1 ? 's' : ''} online agora`;
+            countEl.innerHTML = `🟢 ${countOnline} online agora`;
         } else {
             countEl.style.display = 'none';
         }
