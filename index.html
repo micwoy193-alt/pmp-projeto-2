@@ -1211,13 +1211,14 @@ function renderMarkersOnMap() {
         // Popup: polost vê apenas distância e rota, sem dados da vítima
         const popupContent = curUser.role === 'polost'
             ? `<div class="popup-box">
-                <div style="text-align:center;padding:8px 0;">
-                    <span style="font-size:28px;">🚨</span><br>
-                    <b style="color:var(--brand);">Medida Protetiva</b><br>
-                    <span class="badge-p badge-d">🚫 DISTÂNCIA: ${v.dist}m</span><br>
-                    ${expTag}
-                    <a href="https://www.google.com/maps/dir/?api=1&destination=${v.lat},${v.lng}" target="_blank" class="btn-gps">🗺️ TRAÇAR ROTA</a>
-                </div>
+                <img src="${v.foto}" class="pop-img" onerror="this.src='https://cdn-icons-png.flaticon.com/512/3135/3135715.png'">
+                <b style="color:var(--brand);font-size:14px;">${v.v_nome}</b><br>
+                <small>📍 ${v.rua}</small>
+                <hr style="margin:8px 0;border:0;border-top:1px solid #eee">
+                <b>Agressor:</b> ${v.a_nome}<br>
+                <span class="badge-p badge-d">🚫 DISTÂNCIA: ${v.dist}m</span><br>
+                ${expTag}
+                <a href="https://www.google.com/maps/dir/?api=1&destination=${v.lat},${v.lng}" target="_blank" class="btn-gps">🗺️ TRAÇAR ROTA</a>
                </div>`
             : `<div class="popup-box">
                 <img src="${v.foto}" class="pop-img" onerror="this.src='https://cdn-icons-png.flaticon.com/512/3135/3135715.png'">
