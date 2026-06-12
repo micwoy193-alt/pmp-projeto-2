@@ -1404,8 +1404,8 @@ function renderVictims() {
             ${v.status === 'inativo' ? `<span class="badge-p" style="background:#FFF3E0;color:#E65100;border:1px solid #FFB300;">⏳ INATIVA — será excluída em breve</span>` : ''}
             <div style="display:flex;gap:8px;margin-top:10px;clear:both;">
                 <a href="https://www.google.com/maps/dir/?api=1&destination=${v.lat},${v.lng}" target="_blank" class="btn-gps" style="flex:1;margin:0;">🗺️ ROTA GPS</a>
-                ${isAdmin ? `<button class="btn btn-secondary btn-sm" onclick="editV(${v.id})" style="margin:0;">✏️</button>` : ''}
-                ${isAdmin ? `<button class="btn btn-danger btn-sm" onclick="deleteV(${v.id})" style="margin:0;">🗑</button>` : ''}
+                ${isAdmin ? `<button class="btn btn-secondary btn-sm" onclick="editV('${v.id}')" style="margin:0;">✏️</button>` : ''}
+                ${isAdmin ? `<button class="btn btn-danger btn-sm" onclick="deleteV('${v.id}')" style="margin:0;">🗑</button>` : ''}
             </div>
         </div>`;
     }).join('');
@@ -1814,7 +1814,7 @@ function populateEditCidades() {
     });
 }
 
-function editV(id) { editAgressor(id); }
+function editV(id) { editAgressor(String(id)); }
 
 function atualizarContadorMPU() {
     const el = document.getElementById('h-mpu-num');
