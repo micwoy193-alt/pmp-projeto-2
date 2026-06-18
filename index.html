@@ -1843,11 +1843,17 @@ async function editLocalizarEndereco() {
     if (!rua)    return alert('⚠️ Preencha o endereço antes de localizar.');
     if (!cidade) return alert('⚠️ Selecione a cidade antes de localizar.');
 
-    if (btn) { btn.textContent = '⏳ Localizando (pode levar alguns segundos)...'; btn.disabled = true; }
+    if (btn) { btn.disabled = true; }
 
     try {
-        // Usa a mesma função robusta de geocodificação com múltiplas estratégias
-        const resultado = await _geocode(rua, cidade);
+        let resultado = null;
+        const MAX_TENTATIVAS = 4;
+        for (let i = 1; i <= MAX_TENTATIVAS; i++) {
+            if (btn) btn.innerHTML = `⏳ Buscando... (tentativa ${i}/${MAX_TENTATIVAS})`;
+            resultado = await _geocode(rua, cidade);
+            if (resultado && !resultado.geo_impreciso) break; // achou com precisão, para
+            if (i < MAX_TENTATIVAS) await new Promise(r => setTimeout(r, 700));
+        }
 
         if (resultado && !resultado.geo_impreciso) {
             const lat = resultado.lat, lng = resultado.lng;
@@ -1863,7 +1869,7 @@ async function editLocalizarEndereco() {
                 if (btn) { btn.innerHTML = '🔍 LOCALIZAR ENDEREÇO NO MAPA'; btn.style.background = ''; btn.disabled = false; }
             }, 3000);
         } else {
-            // Não encontrou com precisão — posiciona no centro da cidade como ponto de partida
+            // Não encontrou com precisão após todas as tentativas — posiciona no centro da cidade
             if (resultado) {
                 document.getElementById('edit-lat').value = resultado.lat.toFixed(6);
                 document.getElementById('edit-lng').value = resultado.lng.toFixed(6);
@@ -1873,11 +1879,8 @@ async function editLocalizarEndereco() {
                     mapEdit.setView([resultado.lat, resultado.lng], 14);
                 }
             }
-            if (btn) { btn.innerHTML = '⚠️ ENDEREÇO IMPRECISO'; btn.style.background = 'linear-gradient(90deg,#E65100,#FF9800)'; btn.disabled = false; }
-            setTimeout(() => {
-                if (btn) { btn.innerHTML = '🔍 LOCALIZAR ENDEREÇO NO MAPA'; btn.style.background = ''; btn.disabled = false; }
-            }, 3000);
-            alert('⚠️ Não foi possível localizar o endereço com precisão em ' + cidade + '.\nO pin foi posicionado no centro da cidade — ajuste manualmente arrastando-o ou use o GPS no local.');
+            if (btn) { btn.innerHTML = '🔄 TENTAR DE NOVO'; btn.style.background = 'linear-gradient(90deg,#E65100,#FF9800)'; btn.disabled = false; }
+            alert('⚠️ Não foi possível localizar o endereço com precisão em ' + cidade + ' após ' + MAX_TENTATIVAS + ' tentativas.\n\nO pin foi posicionado no centro da cidade. Você pode:\n• Clicar em "TENTAR DE NOVO"\n• Ajustar manualmente arrastando o pin\n• Usar o GPS estando no local');
         }
     } catch(e) {
         if (btn) { btn.innerHTML = '🔍 LOCALIZAR ENDEREÇO NO MAPA'; btn.disabled = false; }
@@ -2197,50 +2200,56 @@ async function _tentarNominatim(query, geo) {
     } catch(e) { return null; }
 }
 
-async function _geocode(end, cid) {
+async function _geocode(end, cid, tentativas = 1) {
     const geo = _CIDADES_GEO[cid];
     const enderecoLimpo = _normalizarEndereco(end);
     const partes = _extrairPartes(enderecoLimpo);
     const delay = ms => new Promise(r => setTimeout(r, ms));
 
-    // Estratégia 1: endereço completo com número, cidade, RS, Brasil
-    let resultado = await _tentarNominatim(enderecoLimpo + ', ' + cid + ', Rio Grande do Sul, Brasil', geo);
-    if (resultado) return { lat: resultado.lat, lng: resultado.lng, geo_impreciso: false };
-    await delay(350);
+    let resultado = null;
 
-    // Estratégia 2: só rua + número + cidade (sem bairro/complemento)
-    if (partes.numero) {
-        resultado = await _tentarNominatim(partes.rua + ' ' + partes.numero + ', ' + cid + ', RS, Brasil', geo);
+    for (let t = 0; t < tentativas; t++) {
+        if (t > 0) { console.log(`[GEO] Tentativa ${t+1}/${tentativas} para: ${end}`); await delay(800); }
+
+        // Estratégia 1 (PRIORITÁRIA): só rua + número + cidade — sem bairro, que costuma confundir
+        if (partes.numero) {
+            resultado = await _tentarNominatim(partes.rua + ' ' + partes.numero + ', ' + cid + ', RS, Brasil', geo);
+            if (resultado) return { lat: resultado.lat, lng: resultado.lng, geo_impreciso: false };
+            await delay(350);
+        }
+
+        // Estratégia 2: só o nome da rua (sem número, sem bairro)
+        resultado = await _tentarNominatim(partes.rua + ', ' + cid + ', RS, Brasil', geo);
         if (resultado) return { lat: resultado.lat, lng: resultado.lng, geo_impreciso: false };
         await delay(350);
-    }
 
-    // Estratégia 3: só o nome da rua (sem número) — acerta o logradouro, ainda que não o número exato
-    resultado = await _tentarNominatim(partes.rua + ', ' + cid + ', RS, Brasil', geo);
-    if (resultado) return { lat: resultado.lat, lng: resultado.lng, geo_impreciso: false };
-    await delay(350);
+        // Estratégia 3: expande abreviações (AV. → AVENIDA, R. → RUA) sem bairro
+        const ruaSemAbrev = partes.rua
+            .replace(/^AV\.?\s+/i, 'AVENIDA ')
+            .replace(/^R\.?\s+/i, 'RUA ')
+            .replace(/^TRAV\.?\s+/i, 'TRAVESSA ')
+            .replace(/^AL\.?\s+/i, 'ALAMEDA ');
+        if (ruaSemAbrev !== partes.rua) {
+            resultado = await _tentarNominatim(ruaSemAbrev + (partes.numero ? ' ' + partes.numero : '') + ', ' + cid + ', RS, Brasil', geo);
+            if (resultado) return { lat: resultado.lat, lng: resultado.lng, geo_impreciso: false };
+            await delay(350);
+        }
 
-    // Estratégia 4: remove abreviações comuns (AV., R., TRAV.) que podem confundir
-    const ruaSemAbrev = partes.rua
-        .replace(/^AV\.?\s+/i, 'AVENIDA ')
-        .replace(/^R\.?\s+/i, 'RUA ')
-        .replace(/^TRAV\.?\s+/i, 'TRAVESSA ')
-        .replace(/^AL\.?\s+/i, 'ALAMEDA ');
-    if (ruaSemAbrev !== partes.rua) {
-        resultado = await _tentarNominatim(ruaSemAbrev + ', ' + cid + ', RS, Brasil', geo);
+        // Estratégia 4: endereço completo ORIGINAL (com bairro/complemento) — só agora, como tentativa adicional
+        resultado = await _tentarNominatim(enderecoLimpo + ', ' + cid + ', Rio Grande do Sul, Brasil', geo);
         if (resultado) return { lat: resultado.lat, lng: resultado.lng, geo_impreciso: false };
         await delay(350);
-    }
 
-    // Estratégia 5: sem restrição de área (busca mais ampla, last resort antes do fallback)
-    resultado = await _tentarNominatim(enderecoLimpo + ', ' + cid + ', RS', null);
-    if (resultado && geo) {
-        const dlat = resultado.lat - geo.lat, dlng = resultado.lng - geo.lng;
-        if (Math.sqrt(dlat*dlat + dlng*dlng) <= geo.r * 4) {
+        // Estratégia 5: busca ampla sem restrição de área (last resort)
+        resultado = await _tentarNominatim(partes.rua + (partes.numero ? ' ' + partes.numero : '') + ', ' + cid + ', RS', null);
+        if (resultado && geo) {
+            const dlat = resultado.lat - geo.lat, dlng = resultado.lng - geo.lng;
+            if (Math.sqrt(dlat*dlat + dlng*dlng) <= geo.r * 4) {
+                return { lat: resultado.lat, lng: resultado.lng, geo_impreciso: false };
+            }
+        } else if (resultado && !geo) {
             return { lat: resultado.lat, lng: resultado.lng, geo_impreciso: false };
         }
-    } else if (resultado && !geo) {
-        return { lat: resultado.lat, lng: resultado.lng, geo_impreciso: false };
     }
 
     // Último fallback: centro da cidade — marca como impreciso para ajuste manual
