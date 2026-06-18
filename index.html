@@ -2347,28 +2347,30 @@ function _extrairPartes(end) {
 }
 
 async function _tentarNominatim(query, geo) {
-    let url = 'https://nominatim.openstreetmap.org/search?format=json&limit=6&addressdetails=1&q=' + encodeURIComponent(query);
-    if (geo) {
-        const m = geo.r;
-        url += '&viewbox=' + (geo.lng-m) + ',' + (geo.lat-m) + ',' + (geo.lng+m) + ',' + (geo.lat+m) + '&bounded=1';
-    }
+    // Busca SEM bounded=1 primeiro — o viewbox bounded costuma descartar resultados válidos
+    // em cidades pequenas onde o OSM tem poucos pontos mapeados.
+    const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=8&addressdetails=1&q=' + encodeURIComponent(query);
     try {
         const r = await fetch(url, { headers: { 'Accept-Language': 'pt-BR' } });
         const resultados = await r.json();
         if (!resultados.length) return null;
+
         if (geo) {
+            // Escolhe o resultado mais próximo do centro da cidade entre os retornados
             let melhor = null, menorDist = Infinity;
             for (const res of resultados) {
                 const dlat = +res.lat - geo.lat, dlng = +res.lon - geo.lng;
                 const dist = Math.sqrt(dlat*dlat + dlng*dlng);
                 if (dist < menorDist) { menorDist = dist; melhor = res; }
             }
-            if (melhor && menorDist <= geo.r * 2.5) return { lat: +melhor.lat, lng: +melhor.lon, precisao: melhor.type || melhor.class || '' };
+            // Tolerância ampla: até 3x o raio da cidade (cidades têm formato irregular)
+            if (melhor && menorDist <= geo.r * 3) return { lat: +melhor.lat, lng: +melhor.lon, precisao: melhor.type || melhor.class || '' };
             return null;
         }
         return { lat: +resultados[0].lat, lng: +resultados[0].lon, precisao: resultados[0].type || '' };
     } catch(e) { return null; }
 }
+
 
 async function _geocode(end, cid, tentativas = 1) {
     const geo = _CIDADES_GEO[cid];
@@ -2381,9 +2383,14 @@ async function _geocode(end, cid, tentativas = 1) {
     for (let t = 0; t < tentativas; t++) {
         if (t > 0) { console.log(`[GEO] Tentativa ${t+1}/${tentativas} para: ${end}`); await delay(800); }
 
-        // Estratégia 1 (PRIORITÁRIA): só rua + número + cidade — sem bairro, que costuma confundir
+        // Estratégia 1 (PRIORITÁRIA): rua + número + cidade — formato simples, sem bairro, sem "RS, Brasil"
         if (partes.numero) {
-            resultado = await _tentarNominatim(partes.rua + ' ' + partes.numero + ', ' + cid + ', RS, Brasil', geo);
+            resultado = await _tentarNominatim(partes.rua + ', ' + partes.numero + ', ' + cid, geo);
+            if (resultado) return { lat: resultado.lat, lng: resultado.lng, geo_impreciso: false };
+            await delay(350);
+
+            // Variação: rua + número juntos sem vírgula + cidade
+            resultado = await _tentarNominatim(partes.rua + ' ' + partes.numero + ', ' + cid, geo);
             if (resultado) return { lat: resultado.lat, lng: resultado.lng, geo_impreciso: false };
             await delay(350);
         }
