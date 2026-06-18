@@ -38,18 +38,37 @@
         return 'Santo Ângelo';
     }
 
+    function normEnd(end){if(!end)return'';let e=end.trim();e=e.replace(/,\s*-\s*/g,', ');e=e.replace(/\bN[ºo°]\.?\s*(?=,|$)/gi,'');e=e.replace(/,\s*,/g,',').replace(/\s{2,}/g,' ').trim();return e;}
+    function extPartes(end){const m=end.match(/^(.*?),?\s*(\d{1,6})\s*,?\s*(.*)$/);if(m)return{rua:m[1].trim(),numero:m[2],resto:m[3].trim()};return{rua:end,numero:'',resto:''};}
+    async function tentaGeo(query,g){let url='https://nominatim.openstreetmap.org/search?format=json&limit=6&q='+encodeURIComponent(query);if(g){const m=g.r;url+='&viewbox='+(g.lng-m)+','+(g.lat-m)+','+(g.lng+m)+','+(g.lat+m)+'&bounded=1';}try{const d=await(await fetch(url,{headers:{'Accept-Language':'pt-BR'}})).json();if(!d.length)return null;if(g){let best=null,min=Infinity;for(const r of d){const dist=Math.sqrt(Math.pow(+r.lat-g.lat,2)+Math.pow(+r.lon-g.lng,2));if(dist<min){min=dist;best=r;}}if(best&&min<=g.r*2.5)return{lat:+best.lat,lng:+best.lon};return null;}return{lat:+d[0].lat,lng:+d[0].lon};}catch(e){return null;}}
     async function geocode(end, cid) {
         const g = GEO[cid];
-        let url = 'https://nominatim.openstreetmap.org/search?format=json&limit=5&q=' + encodeURIComponent(end+', '+cid+', RS, Brasil');
-        if (g) url += '&viewbox='+(g.lng-g.r)+','+(g.lat-g.r)+','+(g.lng+g.r)+','+(g.lat+g.r)+'&bounded=1';
-        try {
-            const d = await (await fetch(url,{headers:{'Accept-Language':'pt-BR'}})).json();
-            if (d.length > 0 && g) {
-                let best=null, min=Infinity;
-                for (const r of d) { const dist=Math.sqrt(Math.pow(+r.lat-g.lat,2)+Math.pow(+r.lon-g.lng,2)); if(dist<min){min=dist;best=r;} }
-                if (best && min<=g.r*2) return {lat:+best.lat,lng:+best.lon,ok:true};
-            } else if (d.length > 0) return {lat:+d[0].lat,lng:+d[0].lon,ok:true};
-        } catch(e) {}
+        const limpo = normEnd(end);
+        const partes = extPartes(limpo);
+        let r = await tentaGeo(limpo+', '+cid+', Rio Grande do Sul, Brasil', g);
+        if (r) return {lat:r.lat,lng:r.lng,ok:true};
+        await dl(350);
+        if (partes.numero) {
+            r = await tentaGeo(partes.rua+' '+partes.numero+', '+cid+', RS, Brasil', g);
+            if (r) return {lat:r.lat,lng:r.lng,ok:true};
+            await dl(350);
+        }
+        r = await tentaGeo(partes.rua+', '+cid+', RS, Brasil', g);
+        if (r) return {lat:r.lat,lng:r.lng,ok:true};
+        await dl(350);
+        const ruaSA = partes.rua.replace(/^AV\.?\s+/i,'AVENIDA ').replace(/^R\.?\s+/i,'RUA ').replace(/^TRAV\.?\s+/i,'TRAVESSA ').replace(/^AL\.?\s+/i,'ALAMEDA ');
+        if (ruaSA !== partes.rua) {
+            r = await tentaGeo(ruaSA+', '+cid+', RS, Brasil', g);
+            if (r) return {lat:r.lat,lng:r.lng,ok:true};
+            await dl(350);
+        }
+        r = await tentaGeo(limpo+', '+cid+', RS', null);
+        if (r && g) {
+            const dlat=r.lat-g.lat, dlng=r.lng-g.lng;
+            if (Math.sqrt(dlat*dlat+dlng*dlng) <= g.r*4) return {lat:r.lat,lng:r.lng,ok:true};
+        } else if (r && !g) {
+            return {lat:r.lat,lng:r.lng,ok:true};
+        }
         return {lat:g?g.lat:-28.2865,lng:g?g.lng:-54.2644,ok:false};
     }
 
