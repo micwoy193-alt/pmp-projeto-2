@@ -327,7 +327,11 @@
 
     <!-- ABA MEDIDAS/LISTA -->
     <div id="sec-lista" class="content">
-        <input type="text" id="v-search" placeholder="🔍 Buscar vítima ou bairro..." onkeyup="renderVictims(); registrarBuscaDebounced(this.value, 'medidas');" style="width:100%;padding:13px;margin-bottom:14px;border-radius:11px;border:1.5px solid var(--border);font-size:14px;outline:none;">
+        <input type="text" id="v-search" placeholder="🔍 Buscar vítima ou bairro..." onkeyup="renderVictims(); registrarBuscaDebounced(this.value, 'medidas');" style="width:100%;padding:13px;margin-bottom:10px;border-radius:11px;border:1.5px solid var(--border);font-size:14px;outline:none;">
+        <button id="btn-filtro-geo" onclick="toggleFiltroGeoImpreciso()" style="width:100%;padding:11px;margin-bottom:14px;border-radius:11px;border:1.5px solid #FFD54F;background:#FFF8E1;color:#F57F17;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
+            🟡 <span id="filtro-geo-texto">Mostrar apenas localização aproximada</span>
+            <span id="filtro-geo-count" style="background:#F9A825;color:white;border-radius:20px;padding:2px 9px;font-size:11px;"></span>
+        </button>
         <div id="victims-list"></div>
     </div>
 
@@ -1500,6 +1504,26 @@ async function limparInativas() {
 // ═══════════════════════════════════════════════
 //  LISTA DE VÍTIMAS
 // ═══════════════════════════════════════════════
+let _filtroGeoImpreciso = false;
+
+function toggleFiltroGeoImpreciso() {
+    _filtroGeoImpreciso = !_filtroGeoImpreciso;
+    const btn = document.getElementById('btn-filtro-geo');
+    const txt = document.getElementById('filtro-geo-texto');
+    if (_filtroGeoImpreciso) {
+        btn.style.background = '#F9A825';
+        btn.style.color = 'white';
+        btn.style.borderColor = '#F9A825';
+        txt.textContent = 'Mostrando apenas localização aproximada';
+    } else {
+        btn.style.background = '#FFF8E1';
+        btn.style.color = '#F57F17';
+        btn.style.borderColor = '#FFD54F';
+        txt.textContent = 'Mostrar apenas localização aproximada';
+    }
+    renderVictims();
+}
+
 function renderVictims() {
     atualizarContadorMPU();
     const container = document.getElementById('victims-list');
@@ -1513,14 +1537,27 @@ function renderVictims() {
         : getVisibleVictims();
     if (q) list = list.filter(v => v.v_nome.toLowerCase().includes(q) || v.rua.toLowerCase().includes(q) || v.a_nome.toLowerCase().includes(q));
 
-    if (!list.length) { container.innerHTML = '<div class="alert alert-info">ℹ️ Nenhuma medida protetiva encontrada para sua cidade.</div>'; return; }
+    // Atualiza contador no botão de filtro (conta sobre a lista já filtrada por busca, antes do filtro de geo)
+    const countGeo = list.filter(v => v.geo_impreciso === true).length;
+    const countEl = document.getElementById('filtro-geo-count');
+    if (countEl) countEl.textContent = countGeo > 0 ? countGeo : '';
+
+    if (_filtroGeoImpreciso) list = list.filter(v => v.geo_impreciso === true);
+
+    if (!list.length) {
+        container.innerHTML = _filtroGeoImpreciso
+            ? '<div class="alert alert-info">✅ Nenhuma vítima com localização aproximada — tudo ajustado!</div>'
+            : '<div class="alert alert-info">ℹ️ Nenhuma medida protetiva encontrada para sua cidade.</div>';
+        return;
+    }
 
     container.innerHTML = list.map(v => {
         const expired = v.valid < today;
         const validFmt = v.valid.split('-').reverse().join('/');
         const daysLeft = Math.ceil((new Date(v.valid) - new Date()) / 86400000);
+        const semGeo = v.geo_impreciso === true;
         return `
-        <div class="card victim-card">
+        <div class="card victim-card" style="${semGeo ? 'border:2px solid #F9A825;background:linear-gradient(135deg,#FFFDF5,#fff);' : ''}">
             <img src="${v.foto}" class="foto-lista" onerror="this.src='https://cdn-icons-png.flaticon.com/512/3135/3135715.png'">
             <b style="color:var(--brand);font-size:14px;">${v.v_nome}</b><br>
             <small style="color:var(--muted);">📍 ${v.rua} — ${v.city || ''}</small><br>
@@ -1530,9 +1567,13 @@ function renderVictims() {
                 ? `<span class="badge-p badge-exp">⚠️ MPU vencida em ${validFmt}</span>`
                 : `<span class="badge-p badge-v">✅ MPU: ${validFmt} (${daysLeft}d)</span>`}
             ${v.status === 'inativo' ? `<span class="badge-p" style="background:#FFF3E0;color:#E65100;border:1px solid #FFB300;">⏳ INATIVA — será excluída em breve</span>` : ''}
+            ${semGeo && isAdmin ? `<div style="margin-top:8px;padding:8px 10px;background:#FFF8E1;border:1px solid #FFD54F;border-radius:9px;font-size:12px;color:#F57F17;display:flex;align-items:center;gap:6px;">
+                <span style="font-size:16px;">🟡</span>
+                <span style="flex:1;"><b>Localização aproximada</b> — ajuste manual recomendado</span>
+            </div>` : ''}
             <div style="display:flex;gap:8px;margin-top:10px;clear:both;">
                 <a href="https://www.google.com/maps/dir/?api=1&destination=${v.lat},${v.lng}" target="_blank" class="btn-gps" style="flex:1;margin:0;">🗺️ ROTA GPS</a>
-                ${isAdmin ? `<button class="btn btn-secondary btn-sm" onclick="editV('${v.id}')" style="margin:0;">✏️</button>` : ''}
+                ${isAdmin ? `<button class="btn btn-secondary btn-sm" onclick="editV('${v.id}')" style="margin:0;${semGeo ? 'background:#FFF3E0;border-color:#FFB300;' : ''}">✏️${semGeo ? ' Ajustar' : ''}</button>` : ''}
                 ${isAdmin ? `<button class="btn btn-danger btn-sm" onclick="deleteV('${v.id}')" style="margin:0;">🗑</button>` : ''}
             </div>
         </div>`;
