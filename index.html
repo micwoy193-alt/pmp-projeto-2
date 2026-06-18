@@ -1843,34 +1843,14 @@ async function editLocalizarEndereco() {
     if (!rua)    return alert('⚠️ Preencha o endereço antes de localizar.');
     if (!cidade) return alert('⚠️ Selecione a cidade antes de localizar.');
 
-    if (btn) { btn.textContent = '⏳ Localizando...'; btn.disabled = true; }
-
-    const geo = _CIDADES_GEO[cidade];
-    let url = 'https://nominatim.openstreetmap.org/search?format=json&limit=5&q='
-        + encodeURIComponent(rua + ', ' + cidade + ', RS, Brasil');
-    if (geo) url += '&viewbox='+(geo.lng-geo.r)+','+(geo.lat-geo.r)+','+(geo.lng+geo.r)+','+(geo.lat+geo.r)+'&bounded=1';
+    if (btn) { btn.textContent = '⏳ Localizando (pode levar alguns segundos)...'; btn.disabled = true; }
 
     try {
-        const resp = await fetch(url, { headers: { 'Accept-Language': 'pt-BR' } });
-        const resultados = await resp.json();
+        // Usa a mesma função robusta de geocodificação com múltiplas estratégias
+        const resultado = await _geocode(rua, cidade);
 
-        let melhor = null;
-        if (resultados.length > 0) {
-            if (geo) {
-                let menor = Infinity;
-                for (const r of resultados) {
-                    const dist = Math.sqrt(Math.pow(+r.lat-geo.lat,2)+Math.pow(+r.lon-geo.lng,2));
-                    if (dist < menor) { menor = dist; melhor = r; }
-                }
-                // Se muito longe da cidade, ignora
-                if (menor > geo.r * 3) melhor = null;
-            } else {
-                melhor = resultados[0];
-            }
-        }
-
-        if (melhor) {
-            const lat = +melhor.lat, lng = +melhor.lon;
+        if (resultado && !resultado.geo_impreciso) {
+            const lat = resultado.lat, lng = resultado.lng;
             document.getElementById('edit-lat').value = lat.toFixed(6);
             document.getElementById('edit-lng').value = lng.toFixed(6);
             document.getElementById('edit-geo-coords').textContent = lat.toFixed(6) + ', ' + lng.toFixed(6);
@@ -1883,11 +1863,21 @@ async function editLocalizarEndereco() {
                 if (btn) { btn.innerHTML = '🔍 LOCALIZAR ENDEREÇO NO MAPA'; btn.style.background = ''; btn.disabled = false; }
             }, 3000);
         } else {
-            if (btn) { btn.innerHTML = '⚠️ ENDEREÇO NÃO ENCONTRADO'; btn.style.background = 'linear-gradient(90deg,#B71C1C,#C62828)'; btn.disabled = false; }
+            // Não encontrou com precisão — posiciona no centro da cidade como ponto de partida
+            if (resultado) {
+                document.getElementById('edit-lat').value = resultado.lat.toFixed(6);
+                document.getElementById('edit-lng').value = resultado.lng.toFixed(6);
+                document.getElementById('edit-geo-coords').textContent = resultado.lat.toFixed(6) + ', ' + resultado.lng.toFixed(6);
+                if (mapEdit && markerEdit) {
+                    markerEdit.setLatLng([resultado.lat, resultado.lng]);
+                    mapEdit.setView([resultado.lat, resultado.lng], 14);
+                }
+            }
+            if (btn) { btn.innerHTML = '⚠️ ENDEREÇO IMPRECISO'; btn.style.background = 'linear-gradient(90deg,#E65100,#FF9800)'; btn.disabled = false; }
             setTimeout(() => {
                 if (btn) { btn.innerHTML = '🔍 LOCALIZAR ENDEREÇO NO MAPA'; btn.style.background = ''; btn.disabled = false; }
             }, 3000);
-            alert('⚠️ Endereço não encontrado em ' + cidade + '.\nTente digitar de forma diferente ou ajuste o pin manualmente no mapa.');
+            alert('⚠️ Não foi possível localizar o endereço com precisão em ' + cidade + '.\nO pin foi posicionado no centro da cidade — ajuste manualmente arrastando-o ou use o GPS no local.');
         }
     } catch(e) {
         if (btn) { btn.innerHTML = '🔍 LOCALIZAR ENDEREÇO NO MAPA'; btn.disabled = false; }
@@ -2161,63 +2151,99 @@ const _CIDADES_GEO = {
     "Senador Salgado Filho":  { lat: -27.9364, lng: -54.6833, r: 0.08 }
 };
 
-async function _geocode(end, cid) {
-    const geo = _CIDADES_GEO[cid];
+// Normaliza endereço: remove ruído comum que confunde o geocodificador
+function _normalizarEndereco(end) {
+    if (!end) return '';
+    let e = end.trim();
+    // Remove prefixos de bairro mal formatados como ", - BAIRRO" no final
+    e = e.replace(/,\s*-\s*/g, ', ');
+    // Remove "Nº" "N°" sem número
+    e = e.replace(/\bN[ºo°]\.?\s*(?=,|$)/gi, '');
+    // Remove múltiplas vírgulas/espaços seguidos
+    e = e.replace(/,\s*,/g, ',').replace(/\s{2,}/g, ' ').trim();
+    return e;
+}
 
-    // Monta a query com o nome da cidade explícito
-    const query = end + ', ' + cid + ', Rio Grande do Sul, Brasil';
-
-    // Se temos coordenadas da cidade, usa viewbox para restringir a busca
-    let url = 'https://nominatim.openstreetmap.org/search?format=json&limit=5&addressdetails=1&q='
-        + encodeURIComponent(query);
-
-    if (geo) {
-        // viewbox: minLng, minLat, maxLng, maxLat (área da cidade + margem)
-        const m = geo.r;
-        url += '&viewbox=' + (geo.lng-m) + ',' + (geo.lat-m) + ',' + (geo.lng+m) + ',' + (geo.lat+m);
-        url += '&bounded=1'; // força resultados dentro do viewbox
+// Extrai partes do endereço: número e nome da rua separados
+function _extrairPartes(end) {
+    const m = end.match(/^(.*?),?\s*(\d{1,6})\s*,?\s*(.*)$/);
+    if (m) {
+        return { rua: m[1].trim(), numero: m[2], resto: m[3].trim() };
     }
+    return { rua: end, numero: '', resto: '' };
+}
 
+async function _tentarNominatim(query, geo) {
+    let url = 'https://nominatim.openstreetmap.org/search?format=json&limit=6&addressdetails=1&q=' + encodeURIComponent(query);
+    if (geo) {
+        const m = geo.r;
+        url += '&viewbox=' + (geo.lng-m) + ',' + (geo.lat-m) + ',' + (geo.lng+m) + ',' + (geo.lat+m) + '&bounded=1';
+    }
     try {
         const r = await fetch(url, { headers: { 'Accept-Language': 'pt-BR' } });
         const resultados = await r.json();
-
-        if (resultados.length > 0) {
-            // Verifica qual resultado está mais perto do centro da cidade
-            if (geo) {
-                let melhor = null, menorDist = Infinity;
-                for (const res of resultados) {
-                    const dlat = +res.lat - geo.lat;
-                    const dlng = +res.lon - geo.lng;
-                    const dist = Math.sqrt(dlat*dlat + dlng*dlng);
-                    if (dist < menorDist) { menorDist = dist; melhor = res; }
-                }
-                // Aceita só se estiver dentro do raio da cidade
-                if (melhor && menorDist <= geo.r * 2) {
-                    return { lat: +melhor.lat, lng: +melhor.lon };
-                }
-            } else {
-                return { lat: +resultados[0].lat, lng: +resultados[0].lon };
+        if (!resultados.length) return null;
+        if (geo) {
+            let melhor = null, menorDist = Infinity;
+            for (const res of resultados) {
+                const dlat = +res.lat - geo.lat, dlng = +res.lon - geo.lng;
+                const dist = Math.sqrt(dlat*dlat + dlng*dlng);
+                if (dist < menorDist) { menorDist = dist; melhor = res; }
             }
+            if (melhor && menorDist <= geo.r * 2.5) return { lat: +melhor.lat, lng: +melhor.lon, precisao: melhor.type || melhor.class || '' };
+            return null;
         }
+        return { lat: +resultados[0].lat, lng: +resultados[0].lon, precisao: resultados[0].type || '' };
+    } catch(e) { return null; }
+}
 
-        // Fallback: tenta só o nome da rua + estado (sem bounded)
-        const url2 = 'https://nominatim.openstreetmap.org/search?format=json&limit=3&q='
-            + encodeURIComponent(end + ', ' + cid + ', RS');
-        const r2 = await fetch(url2, { headers: { 'Accept-Language': 'pt-BR' } });
-        const res2 = await r2.json();
-        if (res2.length > 0 && geo) {
-            for (const res of res2) {
-                const dlat = +res.lat - geo.lat;
-                const dlng = +res.lon - geo.lng;
-                if (Math.sqrt(dlat*dlat + dlng*dlng) <= geo.r * 3) {
-                    return { lat: +res.lat, lng: +res.lon };
-                }
-            }
+async function _geocode(end, cid) {
+    const geo = _CIDADES_GEO[cid];
+    const enderecoLimpo = _normalizarEndereco(end);
+    const partes = _extrairPartes(enderecoLimpo);
+    const delay = ms => new Promise(r => setTimeout(r, ms));
+
+    // Estratégia 1: endereço completo com número, cidade, RS, Brasil
+    let resultado = await _tentarNominatim(enderecoLimpo + ', ' + cid + ', Rio Grande do Sul, Brasil', geo);
+    if (resultado) return { lat: resultado.lat, lng: resultado.lng, geo_impreciso: false };
+    await delay(350);
+
+    // Estratégia 2: só rua + número + cidade (sem bairro/complemento)
+    if (partes.numero) {
+        resultado = await _tentarNominatim(partes.rua + ' ' + partes.numero + ', ' + cid + ', RS, Brasil', geo);
+        if (resultado) return { lat: resultado.lat, lng: resultado.lng, geo_impreciso: false };
+        await delay(350);
+    }
+
+    // Estratégia 3: só o nome da rua (sem número) — acerta o logradouro, ainda que não o número exato
+    resultado = await _tentarNominatim(partes.rua + ', ' + cid + ', RS, Brasil', geo);
+    if (resultado) return { lat: resultado.lat, lng: resultado.lng, geo_impreciso: false };
+    await delay(350);
+
+    // Estratégia 4: remove abreviações comuns (AV., R., TRAV.) que podem confundir
+    const ruaSemAbrev = partes.rua
+        .replace(/^AV\.?\s+/i, 'AVENIDA ')
+        .replace(/^R\.?\s+/i, 'RUA ')
+        .replace(/^TRAV\.?\s+/i, 'TRAVESSA ')
+        .replace(/^AL\.?\s+/i, 'ALAMEDA ');
+    if (ruaSemAbrev !== partes.rua) {
+        resultado = await _tentarNominatim(ruaSemAbrev + ', ' + cid + ', RS, Brasil', geo);
+        if (resultado) return { lat: resultado.lat, lng: resultado.lng, geo_impreciso: false };
+        await delay(350);
+    }
+
+    // Estratégia 5: sem restrição de área (busca mais ampla, last resort antes do fallback)
+    resultado = await _tentarNominatim(enderecoLimpo + ', ' + cid + ', RS', null);
+    if (resultado && geo) {
+        const dlat = resultado.lat - geo.lat, dlng = resultado.lng - geo.lng;
+        if (Math.sqrt(dlat*dlat + dlng*dlng) <= geo.r * 4) {
+            return { lat: resultado.lat, lng: resultado.lng, geo_impreciso: false };
         }
-    } catch(e) {}
+    } else if (resultado && !geo) {
+        return { lat: resultado.lat, lng: resultado.lng, geo_impreciso: false };
+    }
 
-    // Último fallback: centro da cidade
+    // Último fallback: centro da cidade — marca como impreciso para ajuste manual
     if (geo) return { lat: geo.lat, lng: geo.lng, geo_impreciso: true };
     return { lat: -28.2865, lng: -54.2644, geo_impreciso: true };
 }
