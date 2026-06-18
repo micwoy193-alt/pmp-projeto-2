@@ -40,7 +40,7 @@
 
     function normEnd(end){if(!end)return'';let e=end.trim();e=e.replace(/,\s*-\s*/g,', ');e=e.replace(/\bN[ºo°]\.?\s*(?=,|$)/gi,'');e=e.replace(/,\s*,/g,',').replace(/\s{2,}/g,' ').trim();return e;}
     function extPartes(end){const m=end.match(/^(.*?),?\s*(\d{1,6})\s*,?\s*(.*)$/);if(m)return{rua:m[1].trim(),numero:m[2],resto:m[3].trim()};return{rua:end,numero:'',resto:''};}
-    async function tentaGeo(query,g){let url='https://nominatim.openstreetmap.org/search?format=json&limit=6&q='+encodeURIComponent(query);if(g){const m=g.r;url+='&viewbox='+(g.lng-m)+','+(g.lat-m)+','+(g.lng+m)+','+(g.lat+m)+'&bounded=1';}try{const d=await(await fetch(url,{headers:{'Accept-Language':'pt-BR'}})).json();if(!d.length)return null;if(g){let best=null,min=Infinity;for(const r of d){const dist=Math.sqrt(Math.pow(+r.lat-g.lat,2)+Math.pow(+r.lon-g.lng,2));if(dist<min){min=dist;best=r;}}if(best&&min<=g.r*2.5)return{lat:+best.lat,lng:+best.lon};return null;}return{lat:+d[0].lat,lng:+d[0].lon};}catch(e){return null;}}
+    async function tentaGeo(query,g){let url='https://nominatim.openstreetmap.org/search?format=json&limit=8&q='+encodeURIComponent(query);try{const d=await(await fetch(url,{headers:{'Accept-Language':'pt-BR'}})).json();if(!d.length)return null;if(g){let best=null,min=Infinity;for(const r of d){const dist=Math.sqrt(Math.pow(+r.lat-g.lat,2)+Math.pow(+r.lon-g.lng,2));if(dist<min){min=dist;best=r;}}if(best&&min<=g.r*3)return{lat:+best.lat,lng:+best.lon};return null;}return{lat:+d[0].lat,lng:+d[0].lon};}catch(e){return null;}}
     async function geocode(end, cid, tentativas) {
         tentativas = tentativas || 3;
         const g = GEO[cid];
@@ -51,8 +51,11 @@
         for (let t = 0; t < tentativas; t++) {
             if (t > 0) await dl(800);
 
-            // Prioridade 1: rua + número, SEM bairro (o bairro costuma confundir o Nominatim)
+            // Prioridade 1: rua + número, SEM bairro, formato simples (rua, número, cidade)
             if (partes.numero) {
+                r = await tentaGeo(partes.rua+', '+partes.numero+', '+cid, g);
+                if (r) return {lat:r.lat,lng:r.lng,ok:true};
+                await dl(350);
                 r = await tentaGeo(partes.rua+' '+partes.numero+', '+cid+', RS, Brasil', g);
                 if (r) return {lat:r.lat,lng:r.lng,ok:true};
                 await dl(350);
