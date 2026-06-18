@@ -300,6 +300,7 @@
         <button class="tab-btn" id="tab-spe" onclick="switchTab('spe',this)" style="display:none;">🔗 SPE</button>
         <button class="tab-btn" id="tab-users" onclick="switchTab('users',this)" style="display:none;">👤 Usuários</button>
         <button class="tab-btn" id="tab-audit" onclick="switchTab('audit',this)" style="display:none;">📋 Auditoria</button>
+        <button class="tab-btn" id="tab-buscas" onclick="switchTab('buscas',this)" style="display:none;">🔎 Histórico Buscas</button>
     </div>
 
     <!-- ABA MAPA -->
@@ -326,7 +327,7 @@
 
     <!-- ABA MEDIDAS/LISTA -->
     <div id="sec-lista" class="content">
-        <input type="text" id="v-search" placeholder="🔍 Buscar vítima ou bairro..." onkeyup="renderVictims()" style="width:100%;padding:13px;margin-bottom:14px;border-radius:11px;border:1.5px solid var(--border);font-size:14px;outline:none;">
+        <input type="text" id="v-search" placeholder="🔍 Buscar vítima ou bairro..." onkeyup="renderVictims(); registrarBuscaDebounced(this.value, 'medidas');" style="width:100%;padding:13px;margin-bottom:14px;border-radius:11px;border:1.5px solid var(--border);font-size:14px;outline:none;">
         <div id="victims-list"></div>
     </div>
 
@@ -335,7 +336,7 @@
         <div class="agressor-header-strip">
             🚨 Galeria de Agressores — Medidas Protetivas
         </div>
-        <input type="text" id="ag-search" class="agressor-search-bar" placeholder="🔍 Buscar por agressor, vítima, endereço ou cidade..." onkeyup="renderAgressores()">
+        <input type="text" id="ag-search" class="agressor-search-bar" placeholder="🔍 Buscar por agressor, vítima, endereço ou cidade..." onkeyup="renderAgressores(); registrarBuscaDebounced(this.value, 'agressores');">
         <div class="agressor-toggle-bar">
             <button class="toggle-view-btn active" id="btn-view-grade" onclick="setAgressorView('grade')">⊞ Grade (Fotos)</button>
             <button class="toggle-view-btn" id="btn-view-lista" onclick="setAgressorView('lista')">☰ Lista Nominal</button>
@@ -506,6 +507,26 @@
             <div id="audit-list"></div>
         </div>
     </div>
+
+    <!-- ABA HISTÓRICO DE BUSCAS (somente master) -->
+    <div id="sec-buscas" class="content">
+        <div class="card">
+            <div class="card-title">🔎 Histórico de Buscas no Sistema</div>
+            <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">Registra o que cada usuário pesquisou nas abas Medidas e Agressores, com data e horário.</p>
+            <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+                <select id="buscas-filter-user" onchange="renderHistoricoBuscas()" style="flex:1;min-width:140px;padding:9px;border-radius:9px;border:1.5px solid var(--border);font-size:13px;">
+                    <option value="">Todos os usuários</option>
+                </select>
+                <select id="buscas-filter-area" onchange="renderHistoricoBuscas()" style="flex:1;min-width:120px;padding:9px;border-radius:9px;border:1.5px solid var(--border);font-size:13px;">
+                    <option value="">Todas as áreas</option>
+                    <option value="medidas">📋 Medidas</option>
+                    <option value="agressores">🚨 Agressores</option>
+                </select>
+                <button class="btn btn-danger btn-sm" onclick="clearHistoricoBuscas()">🗑 Limpar</button>
+            </div>
+            <div id="buscas-list"></div>
+        </div>
+    </div>
 </div>
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -547,6 +568,10 @@ async function _fbDeleteVictim(id) {
 async function _fbAddAudit(entry) {
     try { entry._secret = APP_SECRET; await db.collection('audit').doc(String(entry.id)).set(entry); }
     catch(e) { console.warn('[Firebase] addAudit:', e.message); }
+}
+async function _fbAddBusca(entry) {
+    try { entry._secret = APP_SECRET; await db.collection('search_history').doc(String(entry.id)).set(entry); }
+    catch(e) { console.warn('[Firebase] addBusca:', e.message); }
 }
 async function _fbClearCollection(coll) {
     try {
@@ -711,6 +736,8 @@ function saveVictims(v) {
 }
 function loadAudit() { return JSON.parse(localStorage.getItem('bm_audit') || '[]'); }
 function saveAudit(a) { localStorage.setItem('bm_audit', JSON.stringify(a)); }
+function loadBuscas() { return JSON.parse(localStorage.getItem('bm_search_history') || '[]'); }
+function saveBuscas(a) { localStorage.setItem('bm_search_history', JSON.stringify(a)); }
 
 // ═══════════════════════════════════════════════
 //  AUDIT LOGGER
@@ -728,6 +755,106 @@ function addLog(type, description, userId) {
     if (logs.length > 500) logs.pop();
     saveAudit(logs);
     if (fbConnected) _fbAddAudit(entry); // sync assíncrono
+}
+
+// ── Histórico de Buscas ──
+let _buscaDebounceTimer = null;
+let _ultimaBuscaRegistrada = '';
+
+function registrarBuscaDebounced(termo, area) {
+    clearTimeout(_buscaDebounceTimer);
+    _buscaDebounceTimer = setTimeout(() => {
+        const t = (termo || '').trim();
+        // Só registra buscas com 2+ caracteres e diferentes da última registrada
+        if (t.length < 2) return;
+        const chave = area + '::' + t.toLowerCase();
+        if (chave === _ultimaBuscaRegistrada) return;
+        _ultimaBuscaRegistrada = chave;
+
+        const entry = {
+            id: Date.now() + Math.random(),
+            userId: curUser ? curUser.id : 'SISTEMA',
+            userName: curUser ? `${curUser.rank || ''} ${curUser.name || curUser.id}`.trim() : 'Desconhecido',
+            userRole: curUser ? curUser.role : '',
+            area: area, // 'medidas' ou 'agressores'
+            termo: t,
+            ts: new Date().toLocaleString('pt-BR'),
+            tsRaw: Date.now()
+        };
+
+        const buscas = loadBuscas();
+        buscas.unshift(entry);
+        if (buscas.length > 1000) buscas.pop();
+        saveBuscas(buscas);
+        if (fbConnected) _fbAddBusca(entry);
+    }, 1200); // espera 1.2s após parar de digitar
+}
+
+async function renderHistoricoBuscas() {
+    const container = document.getElementById('buscas-list');
+    if (!container) return;
+    container.innerHTML = '<p style="color:var(--muted);font-size:12px;">Carregando histórico...</p>';
+
+    // Busca do Firebase para ver registros de todos os dispositivos
+    if (fbConnected) {
+        try {
+            const snap = await db.collection('search_history').orderBy('tsRaw', 'desc').limit(500).get();
+            const fbBuscas = snap.docs.map(d => d.data());
+            if (fbBuscas.length) saveBuscas(fbBuscas);
+        } catch(e) {
+            console.warn('[Firebase] loadBuscas:', e.message);
+        }
+    }
+
+    const filtroUser = document.getElementById('buscas-filter-user')?.value || '';
+    const filtroArea = document.getElementById('buscas-filter-area')?.value || '';
+
+    let buscas = loadBuscas();
+
+    // Popula filtro de usuários dinamicamente (refaz a cada render para refletir novos dados)
+    const selUser = document.getElementById('buscas-filter-user');
+    if (selUser) {
+        const valorAtual = selUser.value;
+        selUser.innerHTML = '<option value="">Todos os usuários</option>';
+        const idsUnicos = [...new Set(buscas.map(b => b.userId))];
+        idsUnicos.forEach(uid => {
+            const b = buscas.find(x => x.userId === uid);
+            const opt = document.createElement('option');
+            opt.value = uid;
+            opt.textContent = b ? (b.userName || uid) : uid;
+            selUser.appendChild(opt);
+        });
+        selUser.value = valorAtual;
+    }
+
+    if (filtroUser) buscas = buscas.filter(b => b.userId == filtroUser);
+    if (filtroArea) buscas = buscas.filter(b => b.area === filtroArea);
+
+    if (!buscas.length) {
+        container.innerHTML = '<p style="color:var(--muted);font-size:12px;">Nenhuma busca registrada ainda.</p>';
+        return;
+    }
+
+    const areaLabel = { medidas: '📋 Medidas', agressores: '🚨 Agressores' };
+    const areaColor = { medidas: '#4A6FD4', agressores: '#C62828' };
+
+    container.innerHTML = buscas.slice(0, 300).map(b => `
+        <div class="log-entry" style="border-left:3px solid ${areaColor[b.area] || '#999'};">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                <b style="font-size:12px;color:${areaColor[b.area] || '#333'};">${areaLabel[b.area] || b.area}</b>
+                <span class="log-time">${b.ts}</span>
+            </div>
+            <div style="margin-top:4px;font-size:13px;"><b>"${b.termo}"</b></div>
+            <div style="color:var(--muted);font-size:10px;margin-top:3px;">👤 ${b.userName || b.userId} (ID ${b.userId})</div>
+        </div>`).join('');
+}
+
+function clearHistoricoBuscas() {
+    if (!confirm("Limpar todo o histórico de buscas? Esta ação não pode ser desfeita.")) return;
+    saveBuscas([]);
+    if (fbConnected) _fbClearCollection('search_history');
+    addLog('DELETE', 'Histórico de buscas limpo pelo master', curUser.id);
+    renderHistoricoBuscas();
 }
 
 // ═══════════════════════════════════════════════
@@ -841,10 +968,11 @@ function startApp() {
     }
     if (curUser.role === 'master') {
         document.getElementById('tab-audit').style.display = '';
+        document.getElementById('tab-buscas').style.display = '';
     }
     // Polost: só vê o mapa — esconde todas as outras abas
     if (curUser.role === 'polost') {
-        ['tab-lista','tab-agressores','tab-admin','tab-spe','tab-users','tab-audit'].forEach(id => {
+        ['tab-lista','tab-agressores','tab-admin','tab-spe','tab-users','tab-audit','tab-buscas'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.style.display = 'none';
         });
@@ -1738,6 +1866,7 @@ function switchTab(id, btn) {
     if (id === 'admin') { setTimeout(() => { if (mapS) mapS.invalidateSize(); }, 200); }
     if (id === 'users') { renderPending(); renderUsers(); }
     if (id === 'audit') { renderAudit(); }
+    if (id === 'buscas') { renderHistoricoBuscas(); }
     if (id === 'spe') { _speIniciarListener(); }
     if (id === 'agressores') {
         document.getElementById('agressores-grid').style.display  = agressorView === 'grade' ? '' : 'none';
