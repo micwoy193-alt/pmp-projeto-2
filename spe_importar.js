@@ -132,8 +132,24 @@
         if(!total){ui('⚠️ Sem vítimas','Navegue até Vítimas no SPE',0);break;}
         for(let i=0;i<total;i++){
             const btn=document.querySelectorAll(sel)[i];if(!btn)continue;
-            btn.click();const d=await lerModal();fecharModal();await delay(750);
-            if(!d||!d.nome){erros.push('linha '+(i+1));continue;}
+            btn.click();
+            let d=await lerModal();
+            // Retry automático: se não conseguiu ler o modal, tenta mais 2 vezes
+            for(let retry=0; retry<2 && (!d||!d.nome); retry++){
+                console.warn('[PMP] Retry '+(retry+1)+' para linha '+(i+1));
+                fecharModal();
+                await delay(500);
+                const btn2=document.querySelectorAll(sel)[i];
+                if(!btn2) break;
+                btn2.click();
+                d=await lerModal();
+            }
+            fecharModal();await delay(750);
+            if(!d||!d.nome){
+                erros.push('Linha '+(i+1)+' (modal não abriu/nome vazio)');
+                console.error('[PMP] ERRO linha '+(i+1)+': modal não capturado mesmo após retries');
+                continue;
+            }
             const cpfL=(d.cpf||'').replace(/\D/g,'');
             const rgL=(d.rg||'').replace(/\D/g,'');
             const nomeN=(d.nome||'').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
@@ -158,7 +174,7 @@
                             updatedBy:'importador_spe',_secret:SECRET
                         });
                         atualizados.push(d.nome);
-                    }catch(e){erros.push(d.nome);}
+                    }catch(e){erros.push(d.nome+' ('+e.message+')');console.error('[PMP] Erro update:',d.nome,e.message);}
                 } else {
                     // Reativa se estava inativa
                     if(ex.status==='inativo'){
@@ -191,7 +207,7 @@
             }
             await delay(400);
             const v={id:Date.now()+Math.random(),city:cidade,v_nome:d.nome,rua:d.endV||'Endereço não informado',a_nome:d.autor||'Não identificado',a_rg:d.cpf||d.rg||'',a_rua:'',valid:d.vd,dist:1,foto:'https://cdn-icons-png.flaticon.com/512/3135/3135715.png',lat:coords.lat,lng:coords.lng,geo_impreciso:!coords.ok,cpf:d.cpf||'',rg:d.rg||'',telefone:d.tel||'',numMpu:d.mpu||'',status:'ativo',obs:'Importado SPE '+new Date().toLocaleDateString('pt-BR'),createdBy:'importador_spe',createdAt:new Date().toISOString(),_secret:SECRET};
-            try{await db.collection('victims').doc(String(v.id)).set(v);base.set(chave,{docId:String(v.id),data:v});importados.push(d.nome);}catch(e){erros.push(d.nome);}
+            try{await db.collection('victims').doc(String(v.id)).set(v);base.set(chave,{docId:String(v.id),data:v});importados.push(d.nome);}catch(e){erros.push(d.nome+' ('+e.message+')');console.error('[PMP] Erro set:',d.nome,e.message);}
         }
         const bP=Array.from(document.querySelectorAll('.pagination .page-item a,.pagination a.page-link')).find(a=>/próximo|next|›|»/i.test(a.innerText));
         if(!bP||bP?.closest('li')?.classList.contains('disabled')||bP?.classList.contains('disabled'))break;
@@ -223,11 +239,15 @@
             });
             inativados.push(data.v_nome||docId);
             console.log('[PMP] Inativada:', data.v_nome);
-        }catch(e){erros.push(data.v_nome||docId);}
+        }catch(e){erros.push((data.v_nome||docId)+' ('+e.message+')');console.error('[PMP] Erro inativar:',data.v_nome,e.message);}
     }
 
     const msg='✅ '+importados.length+' novas\n🔄 '+atualizados.length+' atualizadas\n⏭ '+ignorados.length+' sem alteração\n⏳ '+inativados.length+' inativadas (excluídas em 2 dias)\n❌ '+erros.length+' erros';
     pan.innerHTML='<b>✅ Concluído!</b><div style="margin-top:6px;font-size:11px;line-height:1.8;opacity:.9">'+msg.replace(/\n/g,'<br>')+'</div>';
     setTimeout(()=>pan.remove(),10000);
-    alert('✅ Importação concluída!\n\n'+msg+'\n\nAtualize o site da Patrulha para ver as alterações.');
+    if (erros.length > 0) {
+        console.error('[PMP] === LISTA DE ERROS (' + erros.length + ') ===');
+        erros.forEach((e, idx) => console.error((idx+1) + '. ' + e));
+    }
+    alert('✅ Importação concluída!\n\n'+msg+(erros.length > 0 ? '\n\n⚠️ Veja o Console (F12) para detalhes dos erros.' : '')+'\n\nAtualize o site da Patrulha para ver as alterações.');
 })();
