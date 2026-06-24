@@ -42,7 +42,7 @@
     function extPartes(end){const m=end.match(/^(.*?),?\s*(\d{1,6})\s*,?\s*(.*)$/);if(m)return{rua:m[1].trim(),numero:m[2],resto:m[3].trim()};return{rua:end,numero:'',resto:''};}
     async function tentaGeo(query,g){let url='https://nominatim.openstreetmap.org/search?format=json&limit=8&q='+encodeURIComponent(query);try{const d=await(await fetch(url,{headers:{'Accept-Language':'pt-BR'}})).json();if(!d.length)return null;if(g){let best=null,min=Infinity;for(const r of d){const dist=Math.sqrt(Math.pow(+r.lat-g.lat,2)+Math.pow(+r.lon-g.lng,2));if(dist<min){min=dist;best=r;}}if(best&&min<=g.r*3)return{lat:+best.lat,lng:+best.lon};return null;}return{lat:+d[0].lat,lng:+d[0].lon};}catch(e){return null;}}
     async function geocode(end, cid, tentativas) {
-        tentativas = tentativas || 3;
+        tentativas = tentativas || 1; // 1 tentativa é suficiente — reduz risco de travar/rate-limit
         const g = GEO[cid];
         const limpo = normEnd(end);
         const partes = extPartes(limpo);
@@ -55,38 +55,18 @@
             if (partes.numero) {
                 r = await tentaGeo(partes.rua+', '+partes.numero+', '+cid, g);
                 if (r) return {lat:r.lat,lng:r.lng,ok:true};
-                await dl(350);
-                r = await tentaGeo(partes.rua+' '+partes.numero+', '+cid+', RS, Brasil', g);
-                if (r) return {lat:r.lat,lng:r.lng,ok:true};
-                await dl(350);
+                await dl(300);
             }
 
             // Prioridade 2: só o nome da rua
             r = await tentaGeo(partes.rua+', '+cid+', RS, Brasil', g);
             if (r) return {lat:r.lat,lng:r.lng,ok:true};
-            await dl(350);
+            await dl(300);
 
-            // Prioridade 3: expande abreviações
-            const ruaSA = partes.rua.replace(/^AV\.?\s+/i,'AVENIDA ').replace(/^R\.?\s+/i,'RUA ').replace(/^TRAV\.?\s+/i,'TRAVESSA ').replace(/^AL\.?\s+/i,'ALAMEDA ');
-            if (ruaSA !== partes.rua) {
-                r = await tentaGeo(ruaSA+(partes.numero?' '+partes.numero:'')+', '+cid+', RS, Brasil', g);
-                if (r) return {lat:r.lat,lng:r.lng,ok:true};
-                await dl(350);
-            }
-
-            // Prioridade 4: endereço completo ORIGINAL (com bairro) — tentativa adicional
+            // Prioridade 3: endereço completo ORIGINAL (com bairro) — tentativa adicional
             r = await tentaGeo(limpo+', '+cid+', Rio Grande do Sul, Brasil', g);
             if (r) return {lat:r.lat,lng:r.lng,ok:true};
-            await dl(350);
-
-            // Prioridade 5: busca ampla sem restrição de área
-            r = await tentaGeo(partes.rua+(partes.numero?' '+partes.numero:'')+', '+cid+', RS', null);
-            if (r && g) {
-                const dlat=r.lat-g.lat, dlng=r.lng-g.lng;
-                if (Math.sqrt(dlat*dlat+dlng*dlng) <= g.r*4) return {lat:r.lat,lng:r.lng,ok:true};
-            } else if (r && !g) {
-                return {lat:r.lat,lng:r.lng,ok:true};
-            }
+            await dl(300);
         } // fecha for de tentativas
         return {lat:g?g.lat:-28.2865,lng:g?g.lng:-54.2644,ok:false};
     }
@@ -196,8 +176,20 @@
 
             // Nova vítima
             const cidade=detCidade(d.endV);
-            const coords=d.endV?await geocode(d.endV,cidade):{lat:GEO[cidade]?.lat||-28.2865,lng:GEO[cidade]?.lng||-54.2644,ok:false};
-            await delay(600);
+            let coords;
+            if (d.endV) {
+                try {
+                    coords = await Promise.race([
+                        geocode(d.endV,cidade),
+                        new Promise(resolve => setTimeout(() => resolve({lat:GEO[cidade]?.lat||-28.2865,lng:GEO[cidade]?.lng||-54.2644,ok:false}), 6000))
+                    ]);
+                } catch(e) {
+                    coords = {lat:GEO[cidade]?.lat||-28.2865,lng:GEO[cidade]?.lng||-54.2644,ok:false};
+                }
+            } else {
+                coords = {lat:GEO[cidade]?.lat||-28.2865,lng:GEO[cidade]?.lng||-54.2644,ok:false};
+            }
+            await delay(400);
             const v={id:Date.now()+Math.random(),city:cidade,v_nome:d.nome,rua:d.endV||'Endereço não informado',a_nome:d.autor||'Não identificado',a_rg:d.cpf||d.rg||'',a_rua:'',valid:d.vd,dist:1,foto:'https://cdn-icons-png.flaticon.com/512/3135/3135715.png',lat:coords.lat,lng:coords.lng,geo_impreciso:!coords.ok,cpf:d.cpf||'',rg:d.rg||'',telefone:d.tel||'',numMpu:d.mpu||'',status:'ativo',obs:'Importado SPE '+new Date().toLocaleDateString('pt-BR'),createdBy:'importador_spe',createdAt:new Date().toISOString(),_secret:SECRET};
             try{await db.collection('victims').doc(String(v.id)).set(v);base.set(chave,{docId:String(v.id),data:v});importados.push(d.nome);}catch(e){erros.push(d.nome);}
         }
